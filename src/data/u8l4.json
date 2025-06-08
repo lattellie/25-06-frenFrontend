@@ -1,0 +1,12 @@
+{
+    "the name of the airline": "le nom de la compagnie aérienne",
+    "the seat number": "le numéro du siège",
+    "the name of the passenger": "le nom du passager",
+    "the flight number": "le numéro du vol",
+    "a date": "une date",
+    "a departure location": "une origine",
+    "a destination": "une destination",
+    "the boarding time": "l'heure d'embarquement",
+    "the take-off time": "l'heure de décollage",
+    "the boarding gate": "la porte d'embarquement"
+}
