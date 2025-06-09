@@ -14,8 +14,13 @@ interface VocabUnitContextType {
 
 }
 
+interface ShowEnglishContextType {
+    showEnglish: boolean;
+    setShowEnglish: (showEnglish: boolean) => void;
+}
 const VocabContext = createContext<VocabContextType | undefined>(undefined);
 const VocabUnitContext = createContext<VocabUnitContextType | undefined>(undefined);
+const showEnglishContext = createContext<ShowEnglishContextType|undefined>(undefined);
 
 export const useVocabContext = () => {
   const context = useContext(VocabContext);
@@ -32,16 +37,27 @@ export const useVocabUnitContext = () => {
   }
   return context;
 };
+
+export const useShowEnglishContext = () => {
+  const context = useContext(showEnglishContext);
+  if (!context) {
+    throw new Error('useVocabContext must be used within a VocabProvider');
+  }
+  return context;
+};
+
 export const VocabProvider = ({ children }: { children: ReactNode }) => {
   const [vocabs, setVocabs] = useState<Vocab[]>([]);
   const [units, setUnits] = useState<VocabUnit[]>([]);
-
+  const [showEnglish, setShowEnglish] = useState<boolean>(true);
+ 
   return (
+    <showEnglishContext.Provider value={{showEnglish, setShowEnglish}}>
     <VocabUnitContext.Provider value={{units, setUnits}}>
     <VocabContext.Provider value={{ vocabs, setVocabs }}>
       {children}
     </VocabContext.Provider>
-
     </VocabUnitContext.Provider>
+    </showEnglishContext.Provider>
   );
 };

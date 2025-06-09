@@ -1,9 +1,10 @@
 import { Box, Button, Typography, useTheme } from '@mui/material';
-import { useVocabContext, useVocabUnitContext } from '../contexts/VocabContext';
+import { useShowEnglishContext, useVocabContext, useVocabUnitContext } from '../contexts/VocabContext';
 import type { Vocab } from '../type/vocabDD';
 import { FaCirclePlay } from 'react-icons/fa6';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { MdCheckBox, MdCheckBoxOutlineBlank } from 'react-icons/md';
 
 const frenchCharSet = ['\'', 'a', 'à', 'â', 'b', 'c', 'ç', 'd', 'e', 'é', 'è', 'ê', 'ë', 'f', 'g', 'h', 'i', 'î', 'ï', 'j', 'k', 'l', 'm', 'n', 'o', 'ô', 'œ', 'p', 'q', 'r', 's', 't', 'u', 'ù', 'û', 'ü', 'v', 'w', 'x', 'y', 'ÿ', 'z', '-']
 
@@ -41,6 +42,7 @@ export default function DictationPage() {
     const theme = useTheme();
     const { vocabs } = useVocabContext()
     const { units } = useVocabUnitContext()
+    const { showEnglish, setShowEnglish } = useShowEnglishContext()
     const [firstLoad, setFirstLoad] = useState(true);
 
     const voices = useVoices();
@@ -61,7 +63,7 @@ export default function DictationPage() {
     const handleSubmit = (e: { preventDefault: () => void; }) => {
         if (currVocabs.length === 0) {
             e.preventDefault();
-        }else if (firstLoad) {
+        } else if (firstLoad) {
             playAudio(currVocabs[currentIndex].vocab.fren)
             setNowSubmit(true)
         } else if (nowSubmit) {
@@ -285,9 +287,26 @@ export default function DictationPage() {
                             overflowX: 'scroll',
                             height: '100%',
                             justifyContent: 'center',
-                            alignItems: 'center'
+                            alignItems: 'center',
                         }}
                     >
+                        <Box sx={{
+                            fontSize: '30px',
+                            gap: 2,
+                            display: 'flex',
+                            flexDirection: 'row',
+                            m: 2,
+                            cursor: 'pointer'
+                        }} onClick={() => setShowEnglish(!showEnglish)}>
+                            {showEnglish ? (
+                                <MdCheckBox color={theme.palette.brown.main} />
+                            ) : (
+                                <MdCheckBoxOutlineBlank color={theme.palette.brown.main} />
+                            )}
+                            <Typography variant='h6'>
+                                Display English translation
+                            </Typography>
+                        </Box>
                         <Button type="submit" sx={{
                             backgroundColor: theme.palette.brown.main,
                             color: theme.palette.brown.contrastText,
@@ -401,9 +420,13 @@ export default function DictationPage() {
                                 >
                                     <FaCirclePlay fontSize={'100px'} />
                                 </Box>
-                                <Typography variant="h4" gutterBottom>
-                                    {currVocabs[currentIndex].vocab.engl}
-                                </Typography>
+                                {showEnglish ? (
+                                    <Typography variant="h4" gutterBottom>
+                                        {currVocabs[currentIndex].vocab.engl}
+                                    </Typography>
+                                ) : (
+                                    <></>
+                                )}
                                 <Box
                                     component="form"
                                     onSubmit={handleSubmit}
@@ -452,7 +475,7 @@ export default function DictationPage() {
                                 theme.palette.beige.dark :
                                 theme.palette.brown.dark
                         },
-                    }} onClick={() => {navigate("/viewVocab") }}>
+                    }} onClick={() => { navigate("/viewVocab") }}>
                         Next
                     </Button>
                 </Box>
