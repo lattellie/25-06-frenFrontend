@@ -1,14 +1,13 @@
 // src/pages/HomePage.tsx
-import { Box, Button, Checkbox, Typography, useTheme } from '@mui/material';
+import { Box, Button, Typography, useTheme } from '@mui/material';
 
 import { useEffect, useState } from 'react';
 import { getData, getTitles } from '../utils/getData';
-//import { CgAdd, CgCloseO } from "react-icons/cg"; -- SOPHIE
-import theme from '../theme';
 import type { Vocab, VocabUnit, VocabEntry } from '../type/vocabDD';
 import { MdCheckBoxOutlineBlank, MdCheckBox } from "react-icons/md";
 import { FaCirclePlay } from 'react-icons/fa6';
-
+import { useVocabContext, useVocabUnitContext } from '../contexts/VocabContext';
+import { useNavigate } from 'react-router-dom';
 
 function useVoices() {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -36,7 +35,6 @@ function useVoices() {
   return voices;
 }
 
-
 export default function HomePage() {
   const theme = useTheme();
   const titleList: string[] = getTitles();
@@ -44,6 +42,10 @@ export default function HomePage() {
 
   const [selectedTitles, setSelectedTitles] = useState<string[]>([]);
   const [wordLists, setWordLists] = useState<VocabUnit[]>([])
+
+  const { setVocabs } = useVocabContext();
+  const { setUnits } = useVocabUnitContext();
+  const navigate = useNavigate()
 
   const toggleTitle = async (title: string) => {
     const wasSelected = selectedTitles.includes(title);
@@ -75,10 +77,10 @@ export default function HomePage() {
     }
 
     const msg = new SpeechSynthesisUtterance(french);
-    msg.lang = 'en-US';
+    msg.lang = 'fr';
 
     // Pick a French voice
-    msg.voice = voices.find(v => v.lang.startsWith('fr')) || null;
+    msg.voice = voices.find(v => v.lang.startsWith('fr-CA')) || null;
 
     window.speechSynthesis.cancel(); // <-- Optional: cancel any ongoing speech
     window.speechSynthesis.speak(msg);
@@ -188,15 +190,15 @@ export default function HomePage() {
       </Box>
     )
   }
-  function selectAll(unit:VocabUnit, allChosen:boolean) {
+  function selectAll(unit: VocabUnit, allChosen: boolean) {
     setWordLists(prev => prev.map(u =>
       u.name === unit.name ? {
-        ...u, vocabs: u.vocabs.map(v => ({...v, selected: !allChosen}))
+        ...u, vocabs: u.vocabs.map(v => ({ ...v, selected: !allChosen }))
       } : u
     ))
   }
   function unitItem(unit: VocabUnit) {
-    const allChosen:boolean = unit.vocabs.every(vocab => vocab.selected);;
+    const allChosen: boolean = unit.vocabs.every(vocab => vocab.selected);;
     return (
       <Box sx={{
         minWidth: 'fit-content',
@@ -212,20 +214,20 @@ export default function HomePage() {
           borderBottom: `3px solid ${theme.palette.beige.dark}`,
           pb: 2
         }}>
-        <Button sx={{
-          color:theme.palette.brown.contrastText,
-          backgroundColor:theme.palette.brown.main,
-          mr:2,
-          p:0,
-          pl:1,
-          pr:1,
-          borderRadius:2,
-          '&:hover':{
-            backgroundColor:theme.palette.brown.dark
-          }
-        }} onClick={() => selectAll(unit, allChosen)}>
-          {allChosen? "Deselect All":"Select All"}
-        </Button>
+          <Button sx={{
+            color: theme.palette.brown.contrastText,
+            backgroundColor: theme.palette.brown.main,
+            mr: 2,
+            p: 0,
+            pl: 1,
+            pr: 1,
+            borderRadius: 2,
+            '&:hover': {
+              backgroundColor: theme.palette.brown.dark
+            }
+          }} onClick={() => selectAll(unit, allChosen)}>
+            {allChosen ? "Deselect All" : "Select All"}
+          </Button>
           {`Unit Chosen: ${unit.name}`}
         </Typography>
         <Box sx={{
@@ -238,6 +240,17 @@ export default function HomePage() {
       </Box>
     )
   }
+
+  const handleNext = () => {
+    const vocs: Vocab[] = wordLists.flatMap(wl => wl.vocabs).filter(v => v.selected)
+    if (vocs.length > 0) {
+      setVocabs(vocs);
+      setUnits(wordLists);
+      navigate("/play")
+    } else {
+      alert("select at least 1 vocab to continue")
+    }
+  };
 
 
   return (
@@ -314,7 +327,7 @@ export default function HomePage() {
               overflowX: 'scroll',
               height: '100%',
             }}>
-              {wordLists.map(w => unitItem(w))}
+              {[...wordLists].reverse().map(w => unitItem(w))}
             </Box>
             <Box sx={{
               display: 'flex',
@@ -330,7 +343,7 @@ export default function HomePage() {
                 '&:hover': {
                   backgroundColor: theme.palette.brown.dark
                 },
-              }}>
+              }} onClick={handleNext}>
                 Next
               </Button>
             </Box>
