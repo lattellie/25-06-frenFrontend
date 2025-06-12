@@ -1,5 +1,5 @@
 import { Box, Button, Typography, useTheme } from '@mui/material';
-import { useShowEnglishContext, useVocabContext, useVocabUnitContext } from '../contexts/VocabContext';
+import { useShowEnglishContext, useUseAccentContext, useVocabContext, useVocabUnitContext } from '../contexts/VocabContext';
 import type { Vocab } from '../type/vocabDD';
 import { FaCirclePlay } from 'react-icons/fa6';
 import { useEffect, useState } from 'react';
@@ -38,11 +38,30 @@ const shuffleArray = <T,>(array: T[]): T[] => {
     return [...array].sort(() => Math.random() - 0.5);
 };
 
+function noAccentEqual(str1:string,str2:string) {
+   const str11 = str1.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+   const str22 = str2.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+   return str11 === str22;
+}
+
+
+function playMp3(url: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const audio = new Audio(url);
+
+    audio.onended = () => resolve();
+    audio.onerror = (e) => reject(e);
+
+    audio.play();
+  });
+}
 export default function DictationPage() {
     const theme = useTheme();
     const { vocabs } = useVocabContext()
     const { units } = useVocabUnitContext()
     const { showEnglish, setShowEnglish } = useShowEnglishContext()
+    const { useAccent, setUseAccent} = useUseAccentContext()
+
     const [firstLoad, setFirstLoad] = useState(true);
 
     const voices = useVoices();
@@ -60,7 +79,7 @@ export default function DictationPage() {
     }
     const targetNoSpace = target.replace(/\s/g, "");
 
-    const handleSubmit = (e: { preventDefault: () => void; }) => {
+    const handleSubmit = async (e: { preventDefault: () => void; }) => {
         if (currVocabs.length === 0) {
             e.preventDefault();
         } else if (firstLoad) {
@@ -70,6 +89,16 @@ export default function DictationPage() {
             e.preventDefault();
             const userAnswer = typing.trim().toLowerCase();
             if (userAnswer === currVocabs[currentIndex].vocab.fren.replace(/\s/g, "").toLowerCase()) {
+                await playMp3('/correct1.mp3')
+                const updated = currVocabs.filter((_, i) => i !== currentIndex);
+                setCurrVocabs(updated);
+                setTyping('');
+                if (updated.length > 0) {
+                    setCurrentIndex(currentIndex % updated.length);
+                    playAudio(updated[currentIndex].vocab.fren)
+                }
+            } else if (!useAccent && noAccentEqual(userAnswer,currVocabs[currentIndex].vocab.fren.replace(/\s/g, "").toLowerCase())) {
+                await playMp3('/correct1.mp3')
                 const updated = currVocabs.filter((_, i) => i !== currentIndex);
                 setCurrVocabs(updated);
                 setTyping('');
@@ -78,6 +107,7 @@ export default function DictationPage() {
                     playAudio(updated[currentIndex].vocab.fren)
                 }
             } else {
+                await playMp3('/wrong.mp3')
                 setTyping(currVocabs[currentIndex].vocab.fren.replace(/\s/g, ""))
                 playAudio(currVocabs[currentIndex].vocab.fren)
                 setNowSubmit(false)
@@ -267,7 +297,9 @@ export default function DictationPage() {
                         justifyContent: 'space-between'
                     }}>
                         <Typography variant='body1'> {`Current Progress: ${vocabs.length - currVocabs.length}/${vocabs.length}`} </Typography>
-                        <Typography variant='h4' color={theme.palette.brown.main}> x </Typography>
+                        <Typography variant='h4' color={theme.palette.brown.main} onClick={()=>{navigate("/")}} sx={{
+                            cursor:'pointer'
+                        }}> x </Typography>
                     </Box>
                     <Box
                         component="form"
@@ -295,7 +327,7 @@ export default function DictationPage() {
                             gap: 2,
                             display: 'flex',
                             flexDirection: 'row',
-                            m: 2,
+                            m: 0,
                             cursor: 'pointer'
                         }} onClick={() => setShowEnglish(!showEnglish)}>
                             {showEnglish ? (
@@ -307,6 +339,24 @@ export default function DictationPage() {
                                 Display English translation
                             </Typography>
                         </Box>
+                        <Box sx={{
+                            fontSize: '30px',
+                            gap: 2,
+                            display: 'flex',
+                            flexDirection: 'row',
+                            m: 0,
+                            mb:2,
+                            cursor: 'pointer'
+                        }} onClick={() => setUseAccent(!useAccent)}>
+                            {useAccent ? (
+                                <MdCheckBox color={theme.palette.brown.main} />
+                            ) : (
+                                <MdCheckBoxOutlineBlank color={theme.palette.brown.main} />
+                            )}
+                            <Typography variant='h6'>
+                                Test me with accent
+                            </Typography>
+                        </Box>                        
                         <Button type="submit" sx={{
                             backgroundColor: theme.palette.brown.main,
                             color: theme.palette.brown.contrastText,
@@ -388,7 +438,9 @@ export default function DictationPage() {
                     justifyContent: 'space-between'
                 }}>
                     <Typography variant='body1'> {`Current Progress: ${vocabs.length - currVocabs.length}/${vocabs.length}`} </Typography>
-                    <Typography variant='h4' color={theme.palette.brown.main}> x </Typography>
+                    <Typography variant='h4' color={theme.palette.brown.main} onClick={()=>{navigate("/")}} sx={{
+                            cursor:'pointer'
+                        }}> x </Typography>
                 </Box>
                 <Box sx={{
                     p: 1,

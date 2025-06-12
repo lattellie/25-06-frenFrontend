@@ -18,9 +18,16 @@ interface ShowEnglishContextType {
     showEnglish: boolean;
     setShowEnglish: (showEnglish: boolean) => void;
 }
+
+interface UseAccentContextType {
+    useAccent: boolean;
+    setUseAccent: (showEnglish: boolean) => void;
+}
+
 const VocabContext = createContext<VocabContextType | undefined>(undefined);
 const VocabUnitContext = createContext<VocabUnitContextType | undefined>(undefined);
 const showEnglishContext = createContext<ShowEnglishContextType|undefined>(undefined);
+const useAcdentContext = createContext<UseAccentContextType|undefined>(undefined);
 
 export const useVocabContext = () => {
   const context = useContext(VocabContext);
@@ -38,8 +45,17 @@ export const useVocabUnitContext = () => {
   return context;
 };
 
+
 export const useShowEnglishContext = () => {
   const context = useContext(showEnglishContext);
+  if (!context) {
+    throw new Error('useVocabContext must be used within a VocabProvider');
+  }
+  return context;
+};
+
+export const useUseAccentContext = () => {
+  const context = useContext(useAcdentContext);
   if (!context) {
     throw new Error('useVocabContext must be used within a VocabProvider');
   }
@@ -50,8 +66,10 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
   const [vocabs, setVocabs] = useState<Vocab[]>([]);
   const [units, setUnits] = useState<VocabUnit[]>([]);
   const [showEnglish, setShowEnglish] = useState<boolean>(true);
+  const [useAccent, setUseAccent] = useState<boolean>(true);
  
   return (
+    <useAcdentContext.Provider value={{useAccent, setUseAccent}}>
     <showEnglishContext.Provider value={{showEnglish, setShowEnglish}}>
     <VocabUnitContext.Provider value={{units, setUnits}}>
     <VocabContext.Provider value={{ vocabs, setVocabs }}>
@@ -59,5 +77,6 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
     </VocabContext.Provider>
     </VocabUnitContext.Provider>
     </showEnglishContext.Provider>
+    </useAcdentContext.Provider>
   );
 };
