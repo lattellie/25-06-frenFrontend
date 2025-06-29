@@ -2,7 +2,14 @@ import Select from 'react-select';
 import { useEffect, useState, useRef } from "react";
 
 const Units = ["unit1", "unit2", "unit3", "unit5"]
-const Vocabs = ["rouge", "jaune", "vert", "bleu", "noir", "blanc"];
+const Vocabs = ["rouge", "jaune", "this is a very very very very long word", "bleu", "noir", "blanc"
+    , "rouge", "jaune", "vert", "bleu", "noir", "blanc", "violet", "gris", "marron", "beige"
+    , "rouge", "jaune", "vert", "bleu", "noir", "blanc", "violet", "gris", "marron", "beige"
+    , "rouge", "jaune", "vert", "bleu", "noir", "blanc", "violet", "gris", "marron", "beige"
+    , "rouge", "jaune", "vert", "bleu", "noir", "blanc", "violet", "gris", "marron", "beige"
+    , "rouge", "jaune", "vert", "bleu", "noir", "blanc", "violet", "gris", "marron", "beige"
+
+];
 
 
 
@@ -73,93 +80,114 @@ export default function RecordPage() {
     // --------------------LEFT AND RIGHT BUTTON
     const [currentIndex, setCurrentIndex] = useState(0);
     const goToPrevious = () => {
-        setCurrentIndex((prev) => (prev === 0 ? Vocabs.length - 1 : prev - 1));
+        if (currentIndex > 0) {
+            setCurrentIndex((prev) => prev - 1);
+        }
     };
 
     const goToNext = () => {
-        setCurrentIndex((prev) => (prev === Vocabs.length - 1 ? 0 : prev + 1));
+        if (currentIndex < Vocabs.length - 1) {
+            setCurrentIndex((prev) => prev + 1);
+        }
     };
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.code === "ArrowLeft") {
+            if (e.code === "ArrowLeft" && currentIndex > 0) {
                 goToPrevious();
-            } else if (e.code === "ArrowRight") {
+            } else if (e.code === "ArrowRight" && currentIndex < Vocabs.length - 1) {
                 goToNext();
             }
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, []);
+    }, [currentIndex]);
 
     //   ---------------------------------------------------------------------------
     return (
-        <div className="flex min-h-screen">
-            {/* 30% width column */}
-            <div className="w-[25%] min-w-[300px] flex flex-col p-5 items-center border-r-3 border-black">
-                {/*THIS IS THE SELECT DROP DOWN*/}
-                <div className="w-full max-w-xs">
-                    <label className="block mb-2 font-medium text-gray-700">
-                        Select a Unit
-                    </label>
-                    <Select
-                        options={options}
-                        placeholder="Search or select..."
-                        styles={{
-                            control: (base, state) => ({
-                                ...base,
-                                borderRadius: '40px', // more rounded
-                                borderColor: state.isFocused ? '#567C8D' : '#567C8D', // border pink or hotpink on focus
-                                boxShadow: state.isFocused ? '0 0 0 1px #567C8D' : '0 0 0 1px #567C8D',
-                                '&:hover': {
-                                    borderColor: '#567C8D',
-                                },
-                                paddingLeft: '5px',
-                            }),
-                            option: (base, state) => ({
-                                ...base,
-                                padding: '12px 20px',
-                                backgroundColor: state.isSelected ? '#567C8D' : state.isFocused ? '#C8D9E6' : 'white',
-                                color: state.isSelected ? '#F5EFEB' : 'black',
-                            }),
-                        }}
-                        classNames={{
-                            control: () => 'rounded-md',
-                        }}
-                    />
+        <div className="flex h-[92vh]">
+            {/* 25% width column */}
+            <div className="w-[25%] min-w-[300px] flex flex-col p-5 items-center border-r-3 border-black ">
+                <div className="w-full flex flex-col h-full p-3 border-amber-600 border-2 overflow-y-auto">
+                    <div className='border-pink-600 border-2'>
+                        <label className="block mb-2 font-medium text-gray-700">
+                            Select a Unit
+                        </label>
+                        {/*THIS IS THE SELECT DROP DOWN*/}
+                        <Select
+                            options={options}
+                            placeholder="Search or select..."
+                            styles={{
+                                control: (base, state) => ({
+                                    ...base,
+                                    borderRadius: '40px', // more rounded
+                                    borderColor: state.isFocused ? 'teal' : 'teal', // border pink or hotpink on focus
+                                    boxShadow: '0 0 0 1px teal',
+                                    '&:hover': {
+                                        borderColor: 'teal',
+                                    },
+                                    paddingLeft: '5px',
+                                }),
+                                option: (base, state) => ({
+                                    ...base,
+                                    padding: '12px 20px',
+                                    backgroundColor: state.isSelected ? 'teal' : state.isFocused ? '#C8D9E6' : 'white',
+                                    color: state.isSelected ? '#F5EFEB' : 'black',
+                                }),
+                            }}
+                            classNames={{
+                                control: () => 'rounded-md',
+                            }}
+                        />
+                    </div>
+                    <div className='flex-1 border-teal-400 border-2'>
+                        {/* THIS IS THE VOCAB LIST */}
+                        {Vocabs.map((word, index) => (
+                            <p className='p-1'>
+                                {index}.{word}
+                            </p>
+                        ))}
+                    </div>
                 </div>
-                {/* THIS IS THE VOCAB LIST */}
-                {Vocabs.map((word, index) => (
-                    <p key={index} className={index === 0 ? "mt-4" : "mt-2"}>
-                        {word}
-                    </p>
-                ))}
+
             </div>
             <div className="flex-1 p-4 flex flex-col items-center">
-                <div className="p-5 items-center">
-                    <button
-                        onClick={goToPrevious}
-                        className="px-2 py-1 text-xl bg-gray-200 rounded hover:bg-gray-300"
-                    >
-                        ←
-                    </button>
-                    <h1 className="text-2xl font-bold">{Vocabs[currentIndex]}</h1>
-                    <button
-                        onClick={goToNext}
-                        className="px-2 py-1 text-xl bg-gray-200 rounded hover:bg-gray-300"
-                    >
-                        →
-                    </button>
-                    <button
-                        onClick={isRecording ? stopRecording : startRecording}
-                        className={`px-4 py-2 ${isRecording ? 'bg-red-500' : 'bg-blue-500'} text-white rounded`}
-                    >
-                        {isRecording ? "Stop Recording" : "Start Recording"}
-                    </button>
 
-                    {audioURL && (
-                        <audio ref={audioRef} controls src={audioURL} className="mt-4" />
-                    )}</div>
-            </div>
-        </div>
+                <div className="p-5 items-center">
+                    <h2> ({currentIndex + 1} / {Vocabs.length})</h2>
+                    <div className='min-h-[300px] flex items-center justify-center p-10'>
+                        <button
+                            onClick={goToPrevious}
+                            className={currentIndex === 0 ? "px-2 py-1 text-xl bg-gray-100 text-gray-300" :
+                                "px-2 py-1 text-xl bg-gray-200 rounded hover:bg-gray-300"
+                            }
+                        >
+                            ←
+                        </button>
+                        <h1 className="w-[500px] text-center text-3xl font-bold pl-10 pr-10">{Vocabs[currentIndex]}</h1>
+                        <button
+                            onClick={goToNext}
+                            className={currentIndex === Vocabs.length - 1 ? "px-2 py-1 text-xl bg-gray-100 text-gray-300" :
+                                "px-2 py-1 text-xl bg-gray-200 rounded hover:bg-gray-300"
+                            }
+                        >
+                            →
+                        </button>
+                    </div>
+                    <div className='flex flex-col items-center'>
+                        <button
+                            onClick={isRecording ? stopRecording : startRecording}
+                            className={`px-4 py-2 ${isRecording ? 'bg-red-500' : 'bg-teal-800'} text-white rounded`}
+                        >
+                            {isRecording ? "Stop Recording" : "Start Recording"}
+                        </button>
+
+                        {audioURL && (
+                            <audio ref={audioRef} controls src={audioURL} className="mt-4" />
+                        )}
+                    </div>
+
+                </div>
+            </div >
+        </div >
     );
 }
