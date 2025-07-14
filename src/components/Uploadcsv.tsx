@@ -26,7 +26,7 @@ export default function Uploadcsv({ isOpen, onClose, onSubmit }: Props) {
             const formData = new FormData();
             formData.append("unit", unit);
             formData.append("className", className);
-            formData.append("file", file);
+            formData.append("csv", file);
 
             const response = await fetch("http://localhost:3001/upload-csv", {
                 method: "POST",

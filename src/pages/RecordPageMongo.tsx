@@ -23,6 +23,10 @@ export default function RecordPageMongo() {
     const [isModalOpen, setIsModalOpen] = useState(false); // for the add csv pop up
     const chunks: Blob[] = [];
 
+    // --- NEW STATE for Delete Unit modal ---
+    const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+    const [unitToDelete, setUnitToDelete] = useState<string | null>(null);
+
     const unitOptions = units.map((unit) => ({
         value: unit,
         label: unit,
@@ -30,6 +34,43 @@ export default function RecordPageMongo() {
 
     const filteredVocabs = vocabData.filter(v => v.unit === selectedUnit);
     const currentVocab = filteredVocabs[currentIndex];
+
+    // --- NEW: Function to delete selected unit ---
+    const handleDeleteUnit = async () => {
+        if (!unitToDelete) {
+            alert("Please select a unit to delete.");
+            return;
+        }
+
+        if (!window.confirm(`Are you sure you want to delete all vocab from unit "${unitToDelete}"?`)) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`http://localhost:3001/delete-unit/${unitToDelete}`, {
+                method: "DELETE",
+            });
+            const json = await res.json();
+
+            if (json.success) {
+                alert(`Deleted ${json.deletedCount} vocab(s) from unit "${unitToDelete}".`);
+                // Update vocabData and units state locally
+                const updatedVocab = vocabData.filter(v => v.unit !== unitToDelete);
+                setVocabData(updatedVocab);
+
+                const updatedUnits = units.filter(u => u !== unitToDelete);
+                setUnits(updatedUnits);
+
+                setSelectedUnit(null);
+                setUnitToDelete(null);
+                setIsDeleteOpen(false);
+            } else {
+                alert("Failed to delete unit: " + json.message);
+            }
+        } catch (err: any) {
+            alert("Error deleting unit: " + err.message);
+        }
+    };
 
     // for the upload csv part
     const handleUploadSubmit = async (unit: string, className: string, file: File) => {
@@ -58,9 +99,7 @@ export default function RecordPageMongo() {
         }
     };
 
-
-
-    // fetchind data from backend
+    // fetching data from backend
     useEffect(() => {
         const fetchVocab = async () => {
             try {
@@ -146,14 +185,70 @@ export default function RecordPageMongo() {
         <div className="flex h-[92vh]">
             <div className="w-[25%] min-w-[300px] flex flex-col p-5 items-center border-r-3 border-black">
                 <div className="w-full flex flex-col h-full p-3 border-amber-600 border-2 overflow-y-auto">
-                    <div className='flex justify-end'>
+                    <div className='flex justify-end space-x-2'>
                         <p
                             onClick={() => setIsModalOpen(true)}
                             className="cursor-pointer inline-block px-4 py-2 bg-teal-800 text-white rounded hover:bg-teal-700 transition"
-                        >Add a unit</p>
-                    </div>
-                    <div className='border-pink-600 border-2 mb-3'>
+                        >
+                            Add a unit
+                        </p>
 
+                        {/* --- NEW Delete a unit button */}
+                        <p
+                            onClick={() => setIsDeleteOpen(true)}
+                            className="cursor-pointer inline-block px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition"
+                        >
+                            Delete a unit
+                        </p>
+                    </div>
+
+                    {/* --- NEW Delete Unit modal UI */}
+                    {isDeleteOpen && (
+                        <div className="mt-3 p-3 border border-red-600 rounded bg-red-50">
+                            <label className="block mb-2 font-medium text-red-700">Select Unit to Delete</label>
+                            <Select
+                                options={unitOptions}
+                                value={unitToDelete ? { value: unitToDelete, label: unitToDelete } : null}
+                                onChange={(selected) => setUnitToDelete(selected?.value || null)}
+                                placeholder="Select unit..."
+                                styles={{
+                                    control: (base) => ({
+                                        ...base,
+                                        borderRadius: '40px',
+                                        borderColor: 'red',
+                                        boxShadow: '0 0 0 1px red',
+                                        '&:hover': { borderColor: 'red' },
+                                        paddingLeft: '5px',
+                                    }),
+                                    option: (base, state) => ({
+                                        ...base,
+                                        padding: '12px 20px',
+                                        backgroundColor: state.isSelected ? 'red' : state.isFocused ? '#F9D6D5' : 'white',
+                                        color: state.isSelected ? '#FFF5F5' : 'black',
+                                    }),
+                                }}
+                            />
+                            <div className="mt-2 flex space-x-2">
+                                <button
+                                    onClick={handleDeleteUnit}
+                                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                                >
+                                    Delete
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setIsDeleteOpen(false);
+                                        setUnitToDelete(null);
+                                    }}
+                                    className="px-4 py-2 border border-red-600 rounded hover:bg-red-100"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className='border-pink-600 border-2 mb-3'>
                         <label className="block mb-2 font-medium text-gray-700">Select a Unit</label>
                         <Select
                             options={unitOptions}
