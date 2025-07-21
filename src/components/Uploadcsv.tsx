@@ -1,16 +1,24 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type Props = {
     isOpen: boolean;
     onClose: () => void;
     onSubmit: (unit: string, className: string, file: File) => void;
+    defaultclass?: string;
 };
 
-export default function Uploadcsv({ isOpen, onClose, onSubmit }: Props) {
+export default function Uploadcsv({ isOpen, onClose, onSubmit, defaultclass }: Props) {
+    console.log("Uploadcsv rendering. isOpen =", isOpen);
     const [unit, setUnit] = useState("");
-    const [className, setClassName] = useState("");
+    const [className, setClassName] = useState(defaultclass ?? "");
     const [file, setFile] = useState<File | null>(null);
     const [status, setStatus] = useState<string>("");
+
+    useEffect(() => {
+        if (isOpen) {
+            setClassName(defaultclass ?? "");
+        }
+    }, [isOpen, defaultclass]);
 
     if (!isOpen) return null;
 
@@ -44,6 +52,8 @@ export default function Uploadcsv({ isOpen, onClose, onSubmit }: Props) {
             if (data.success) {
                 setStatus("✅ Upload successful!");
                 // You can also call onSubmit here if needed
+
+
                 onSubmit(unit, className, file);
                 setUnit("");
                 setClassName("");
