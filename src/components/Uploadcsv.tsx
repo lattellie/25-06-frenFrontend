@@ -40,27 +40,26 @@ export default function Uploadcsv({ isOpen, onClose, onSubmit, defaultclass }: P
                 method: "POST",
                 body: formData,
             });
-
+            const uploadJson = await response.json();
             if (!response.ok) {
-                const text = await response.text();
-                setStatus(`Upload failed: ${text}`);
+                const errordata = await response.json();
+                setStatus(`Upload failed: ${errordata.message || "Unknown error"}`);
+                alert(`Upload failed: ${uploadJson.message || "Unknown error"}`);
+
                 return;
             }
+            alert(`✅ Upload successful!\nInserted: ${uploadJson.insertedCount}\nSkipped (duplicates): ${uploadJson.skippedCount}`);
 
-            const data = await response.json();
-
-            if (data.success) {
+            if (uploadJson.success) {
                 setStatus("✅ Upload successful!");
                 // You can also call onSubmit here if needed
-
-
                 onSubmit(unit, className, file);
                 setUnit("");
                 setClassName("");
                 setFile(null);
                 onClose();
             } else {
-                setStatus(`❌ Upload failed: ${data.message || "Unknown error"}`);
+                setStatus(`❌ Upload failed: ${uploadJson.message || "Unknown error"}`);
             }
         } catch (error) {
             setStatus("❌ Error connecting to server");

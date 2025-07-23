@@ -2,6 +2,7 @@ import Select from 'react-select';
 import { useEffect, useState, useRef } from "react";
 import Uploadcsv from '../components/Uploadcsv';
 import { Trash2, Pencil, X, Plus } from 'lucide-react';
+import { MdUploadFile } from 'react-icons/md';
 
 
 type VocabItem = {
@@ -172,8 +173,34 @@ export default function RecordPageMongo() {
         formData.append("csv", file); // must match the multer field name
 
         try {
+            // // 1. Upload CSV to backend
+            // const uploadRes = await fetch("http://localhost:3001/upload-csv", {
+            //     method: "POST",
+            //     body: formData,
+            // });
+
+            // // SOPHIE ADD
+            // console.log("Response status:", uploadRes.status);
+            // console.log("Response ok:", uploadRes.ok);
+
+            // const uploadJson = await uploadRes.json();
+
+            // //SOPHIE ADD
+            // console.log("Response JSON:", uploadJson);
+
+            // if (!uploadRes.ok) {
+            //     // Show just the message, not the full JSON
+            //     alert(`Upload failed: ${uploadJson.message || "Unknown error"}`);
+            //     return;
+            // }
+
+            // // 2. Show inserted/skipped info
+            // alert(`✅ Upload successful!\nInserted: ${uploadJson.insertedCount}\nSkipped (duplicates): ${uploadJson.skippedCount}`);
+
+            // 3. Fetch updated vocab list
             const res = await fetch("http://localhost:3001/vocab");
             const json = await res.json();
+
             if (json.success) {
                 const allVocabs: VocabItem[] = json.data;
                 setVocabData(allVocabs);
@@ -183,13 +210,44 @@ export default function RecordPageMongo() {
 
                 const uniqueClasses = Array.from(new Set(allVocabs.map(item => item.class || ""))).filter(Boolean);
                 setClasses(uniqueClasses);
+            } else {
+                alert("⚠️ Failed to fetch updated vocab.");
             }
 
         } catch (err) {
-            console.error("Reload error:", err);  // 👈 log the actual error
-            alert("An error occurred during upload.");
+            console.error("Upload or fetch error:", err);
+            alert("❌ An error occurred during upload.");
         }
     };
+
+
+    // SOPHIE CHANGE BACKUP
+
+    // const handleUploadDone = async (unit: string, className: string, file: File) => {
+    //     const formData = new FormData();
+    //     formData.append("unit", unit);
+    //     formData.append("className", className);
+    //     formData.append("csv", file); // must match the multer field name
+
+    //     try {
+    //         const res = await fetch("http://localhost:3001/vocab");
+    //         const json = await res.json();
+    //         if (json.success) {
+    //             const allVocabs: VocabItem[] = json.data;
+    //             setVocabData(allVocabs);
+
+    //             const uniqueUnits = Array.from(new Set(allVocabs.map(item => item.unit || ""))).filter(Boolean);
+    //             setUnits(uniqueUnits);
+
+    //             const uniqueClasses = Array.from(new Set(allVocabs.map(item => item.class || ""))).filter(Boolean);
+    //             setClasses(uniqueClasses);
+    //         }
+
+    //     } catch (err) {
+    //         console.error("Reload error:", err);  // 👈 log the actual error
+    //         alert("An error occurred during upload.");
+    //     }
+    // };
 
     // this function reruns the fetching and gets new data
     const fetchVocab = async () => {
