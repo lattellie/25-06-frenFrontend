@@ -24,7 +24,7 @@ export default function RecordPageMongo() {
     const [audioURL, setAudioURL] = useState<string | null>(null);
     const [isRecording, setIsRecording] = useState(false);
     const audioRef = useRef<HTMLAudioElement | null>(null);
-    const [isModalOpen, setIsModalOpen] = useState(false); // for the add csv pop up
+    const [IsModalOpen, setIsModalOpen] = useState(false); // for the add csv pop up
     const chunks: Blob[] = [];
     const [IsEditing, setIsEditing] = useState(false); // for the add csv pop up
 
@@ -219,14 +219,14 @@ export default function RecordPageMongo() {
     // set up all the keyboard shortcut
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.code === "Space") {
+            if (e.code === "Space" && !IsEditing && !IsModalOpen) {
                 e.preventDefault();
                 toggleRecording();
-            } else if (e.code === "ArrowLeft" && currentIndex > 0) {
+            } else if (e.code === "ArrowLeft" && currentIndex > 0 && !IsEditing && !IsModalOpen) { //hello sophie
                 goToPrevious();
-            } else if (e.code === "ArrowRight" && currentIndex < filteredVocabs.length - 1) {
+            } else if (e.code === "ArrowRight" && currentIndex < filteredVocabs.length - 1 && !IsEditing && !IsModalOpen) {
                 goToNext();
-            } else if (e.code === "KeyP") {
+            } else if (e.code === "KeyP" && !IsEditing && !IsModalOpen) {
                 if (audioRef.current) {
                     audioRef.current.play();
                 }
@@ -321,7 +321,10 @@ export default function RecordPageMongo() {
                                         .sort((a, b) => a.localeCompare(b))
                                         .map(cls => ({ value: cls, label: cls }))}
                                     value={selectedClass ? { value: selectedClass, label: selectedClass } : null}
-                                    onChange={(selected) => setSelectedClass(selected?.value || null)}
+                                    onChange={(selected) => {
+                                        setSelectedClass(selected?.value || null)
+                                            , setSelectedUnit(null)
+                                    }}
                                     placeholder="Select Class..."
                                     styles={{
                                         control: (base) => ({
@@ -619,7 +622,7 @@ export default function RecordPageMongo() {
 
             {/* Render the modal */}
             <Uploadcsv
-                isOpen={isModalOpen}
+                isOpen={IsModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onSubmit={(unit, className, file) => {
                     handleUploadDone(unit, className, file); // sends file to backend
