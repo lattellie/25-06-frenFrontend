@@ -7,6 +7,7 @@ import RecordPage from './pages/RecordPage';
 import UploadAudio from './pages/uploadaudio';
 import AddMongo from './pages/AddMongo';
 import RecordPageMongo from './pages/RecordPageMongo';
+import TryAudio from './pages/tryaudio';
 import './App.css'
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="/record" element={<RecordPage />}></Route>
         <Route path="/upload" element={<UploadAudio />}></Route>
         <Route path="/mongo" element={<AddMongo />} />
+        <Route path="/supaudio" element={<TryAudio />} />
         <Route path="/recordmongo" element={<RecordPageMongo />} />
       </Routes>
     </Router>

@@ -1,8 +1,8 @@
 import Select from 'react-select';
 import { useEffect, useState, useRef } from "react";
 import Uploadcsv from '../components/Uploadcsv';
-import { Trash2, Pencil, X, Plus } from 'lucide-react';
-import { MdUploadFile } from 'react-icons/md';
+import { Trash2, Pencil, X, Plus, Volume2 } from 'lucide-react';
+import { supabase } from "./supabaseClient";
 
 
 type VocabItem = {
@@ -173,31 +173,6 @@ export default function RecordPageMongo() {
         formData.append("csv", file); // must match the multer field name
 
         try {
-            // // 1. Upload CSV to backend
-            // const uploadRes = await fetch("http://localhost:3001/upload-csv", {
-            //     method: "POST",
-            //     body: formData,
-            // });
-
-            // // SOPHIE ADD
-            // console.log("Response status:", uploadRes.status);
-            // console.log("Response ok:", uploadRes.ok);
-
-            // const uploadJson = await uploadRes.json();
-
-            // //SOPHIE ADD
-            // console.log("Response JSON:", uploadJson);
-
-            // if (!uploadRes.ok) {
-            //     // Show just the message, not the full JSON
-            //     alert(`Upload failed: ${uploadJson.message || "Unknown error"}`);
-            //     return;
-            // }
-
-            // // 2. Show inserted/skipped info
-            // alert(`✅ Upload successful!\nInserted: ${uploadJson.insertedCount}\nSkipped (duplicates): ${uploadJson.skippedCount}`);
-
-            // 3. Fetch updated vocab list
             const res = await fetch("http://localhost:3001/vocab");
             const json = await res.json();
 
@@ -219,35 +194,6 @@ export default function RecordPageMongo() {
             alert("❌ An error occurred during upload.");
         }
     };
-
-
-    // SOPHIE CHANGE BACKUP
-
-    // const handleUploadDone = async (unit: string, className: string, file: File) => {
-    //     const formData = new FormData();
-    //     formData.append("unit", unit);
-    //     formData.append("className", className);
-    //     formData.append("csv", file); // must match the multer field name
-
-    //     try {
-    //         const res = await fetch("http://localhost:3001/vocab");
-    //         const json = await res.json();
-    //         if (json.success) {
-    //             const allVocabs: VocabItem[] = json.data;
-    //             setVocabData(allVocabs);
-
-    //             const uniqueUnits = Array.from(new Set(allVocabs.map(item => item.unit || ""))).filter(Boolean);
-    //             setUnits(uniqueUnits);
-
-    //             const uniqueClasses = Array.from(new Set(allVocabs.map(item => item.class || ""))).filter(Boolean);
-    //             setClasses(uniqueClasses);
-    //         }
-
-    //     } catch (err) {
-    //         console.error("Reload error:", err);  // 👈 log the actual error
-    //         alert("An error occurred during upload.");
-    //     }
-    // };
 
     // this function reruns the fetching and gets new data
     const fetchVocab = async () => {
@@ -299,6 +245,13 @@ export default function RecordPageMongo() {
     }, [selectedUnit]);
 
     const startRecording = async () => {
+        if (!currentVocab || !currentVocab.french) {
+            alert("No vocab selected!");
+            return;
+        }
+
+        const filename = currentVocab._id.trim() + ".mp3";
+
         setTimeout(async () => {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const recorder = new MediaRecorder(stream);
@@ -307,13 +260,53 @@ export default function RecordPageMongo() {
             setIsRecording(true);
 
             recorder.ondataavailable = (e) => chunks.push(e.data);
-            recorder.onstop = () => {
+            recorder.onstop = async () => {
                 const blob = new Blob(chunks, { type: "audio/webm" });
-                setAudioURL(URL.createObjectURL(blob));
+                //setAudioURL(URL.createObjectURL(blob));
                 setIsRecording(false);
+                try {
+                    const filePath = `${filename}`;
+
+                    const { error } = await supabase.storage
+                        .from("vocabmp3files")
+                        .upload(filePath, blob, {
+                            upsert: true,
+                            cacheControl: "0", // prevent old cached version
+                        });
+
+                    if (error) throw error;
+
+                    // Get the public URL
+                    const { data: urlData } = supabase.storage
+                        .from("vocabmp3files")
+                        .getPublicUrl(filePath);
+
+                    if (urlData?.publicUrl) {
+                        // Force refresh via timestamp query param
+                        setAudioURL(`${urlData.publicUrl}?t=${Date.now()}`);
+                        await fetch("http://localhost:3001/update-vocab-url", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({
+                                vocabId: currentVocab._id,
+                                mp3URL: `${urlData.publicUrl}?t=${Date.now()}`
+                            }),
+                        });
+                    }
+
+                    console.log(`${urlData.publicUrl}`)
+
+                    alert("Upload successful!");
+                    fetchVocab()
+                } catch (error: any) {
+                    alert("Upload failed: " + error.message);
+                    console.error(error);
+                }
             };
         }, 500);
-    };
+    }
 
     const stopRecording = () => {
         mediaRecorder?.stop();
@@ -523,6 +516,10 @@ export default function RecordPageMongo() {
                                                     }}
                                                 >{index + 1}. {word.french}</p>
                                                 <div className='flex gap-1'>
+                                                    {word.mp3_url &&
+                                                        <Volume2
+                                                            onClick={() => new Audio(`${word.mp3_url}`).play()}
+                                                            className="w-5 h-5 text-amber-800 hover:text-black cursor-pointer"></Volume2>}
                                                     <Pencil
                                                         onClick={() => { handleEditVocab(word) }}
                                                         className="w-5 h-5 text-amber-800 hover:text-black cursor-pointer" />
@@ -542,131 +539,147 @@ export default function RecordPageMongo() {
                     </div>
                 </div>
             </div>
+
+            {/* THE RIGHT SECTION */}
             {/* EDIT EACH VOCAB */}
             {IsEditing && (
-                <div className="p-4 border rounded bg-white shadow max-w-md w-full">
-                    <h2 className="text-xl font-bold mb-4">Edit Vocabulary</h2>
-                    <form onSubmit={handleUpdateVocab}>
-                        <div className="mb-3">
-                            <label className="block font-semibold mb-1">French</label>
-                            <input
-                                type="text"
-                                className="w-full border px-2 py-1 rounded"
-                                value={editVocab.french}
-                                onChange={(e) =>
-                                    setEditVocab((prev) => ({ ...prev, french: e.target.value }))
-                                }
-                            />
-                        </div>
-
-                        <div className="mb-3">
-                            <label className="block font-semibold mb-1">English</label>
-                            <input
-                                type="text"
-                                className="w-full border px-2 py-1 rounded"
-                                value={editVocab.english}
-                                onChange={(e) =>
-                                    setEditVocab((prev) => ({ ...prev, english: e.target.value }))
-                                }
-                            />
-                        </div>
-
-                        <div className="mb-3">
-                            <label className="block font-semibold mb-1">Unit</label>
-                            <input
-                                type="text"
-                                className="w-full border px-2 py-1 rounded"
-                                value={editVocab.unit}
-                                onChange={(e) =>
-                                    setEditVocab((prev) => ({ ...prev, unit: e.target.value }))
-                                }
-                            />
-                        </div>
-
-                        <div className="mb-4">
-                            <label className="block font-semibold mb-1">Class</label>
-                            <input
-                                type="text"
-                                className="w-full border px-2 py-1 rounded"
-                                value={editVocab.class}
-                                onChange={(e) =>
-                                    setEditVocab((prev) => ({ ...prev, class: e.target.value }))
-                                }
-                            />
-                        </div>
-
-                        <div className="flex gap-2 justify-end">
-                            <button
-                                type="submit"
-                                className="bg-teal-700 text-white px-4 py-2 rounded hover:bg-teal-800"
-                            >
-                                Save
-                            </button>
-                            <button
-                                type="button"
-                                className="bg-gray-300 text-black px-4 py-2 rounded hover:bg-gray-400"
-                                onClick={cancelEdit}
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
-            )}
-            {
-                selectedUnit && (
-                    // <div className='flex w-full'>
-                    <div className='w-full h-full'>
-                        <div className="flex p-4  flex-col items-center">
-                            <div className="p-5 items-center">
-                                <h2>({filteredVocabs.length > 0 ? currentIndex + 1 : 0} / {filteredVocabs.length})</h2>
-                                <div className='min-h-[300px] flex items-center justify-center p-10'>
-                                    <button
-                                        onClick={goToPrevious}
-                                        className={currentIndex === 0 ? "px-2 py-1 text-xl bg-gray-100 text-gray-300" :
-                                            "px-2 py-1 text-xl bg-gray-200 rounded hover:bg-gray-300"}
-                                    >
-                                        ←
-                                    </button>
-                                    <h1 className="w-[500px] text-center text-3xl font-bold pl-10 pr-10">
-                                        {currentVocab ? currentVocab.french : 'No vocab'}
-                                    </h1>
-                                    <button
-                                        onClick={goToNext}
-                                        className={currentIndex === filteredVocabs.length - 1 ? "px-2 py-1 text-xl bg-gray-100 text-gray-300" :
-                                            "px-2 py-1 text-xl bg-gray-200 rounded hover:bg-gray-300"}
-                                    >
-                                        →
-                                    </button>
-                                </div>
-
-                                <div className='flex flex-col items-center'>
-                                    <button
-                                        onClick={toggleRecording}
-                                        className={`px-4 py-2 ${isRecording ? 'bg-red-500' : 'bg-teal-800'} text-white rounded`}
-                                    >
-                                        {isRecording ? "Stop Recording" : "Start Recording"}
-                                    </button>
-
-                                    {audioURL && (
-                                        <audio ref={audioRef} controls src={audioURL} className="mt-4" />
-                                    )}
-                                </div>
+                <div>
+                    <div className="absolute p-4 border rounded bg-white shadow max-w-md w-full">
+                        <h2 className="text-xl font-bold mb-4">Edit Vocabulary</h2>
+                        <form onSubmit={handleUpdateVocab}>
+                            <div className="mb-3">
+                                <label className="block font-semibold mb-1">French</label>
+                                <input
+                                    type="text"
+                                    className="w-full border px-2 py-1 rounded"
+                                    value={editVocab.french}
+                                    onChange={(e) =>
+                                        setEditVocab((prev) => ({ ...prev, french: e.target.value }))
+                                    }
+                                />
                             </div>
-                            {currentVocab && (
-                                <div className="mt-4 p-2 border-t border-gray-300 text-sm">
-                                    <p><strong>French:</strong> {currentVocab.french}</p>
-                                    <p><strong>English:</strong> {currentVocab.english}</p>
-                                    <p><strong>Unit:</strong> {currentVocab.unit}</p>
-                                    <p><strong>Class:</strong> {currentVocab.class}</p>
-                                    <p><strong>MP3 URL:</strong> {currentVocab.mp3_url}</p>
-                                </div>
-                            )}
 
-                        </div></div>
-                    // </div>
-                )
+                            <div className="mb-3">
+                                <label className="block font-semibold mb-1">English</label>
+                                <input
+                                    type="text"
+                                    className="w-full border px-2 py-1 rounded"
+                                    value={editVocab.english}
+                                    onChange={(e) =>
+                                        setEditVocab((prev) => ({ ...prev, english: e.target.value }))
+                                    }
+                                />
+                            </div>
+
+                            <div className="mb-3">
+                                <label className="block font-semibold mb-1">Unit</label>
+                                <input
+                                    type="text"
+                                    className="w-full border px-2 py-1 rounded"
+                                    value={editVocab.unit}
+                                    onChange={(e) =>
+                                        setEditVocab((prev) => ({ ...prev, unit: e.target.value }))
+                                    }
+                                />
+                            </div>
+
+                            <div className="mb-4">
+                                <label className="block font-semibold mb-1">Class</label>
+                                <input
+                                    type="text"
+                                    className="w-full border px-2 py-1 rounded"
+                                    value={editVocab.class}
+                                    onChange={(e) =>
+                                        setEditVocab((prev) => ({ ...prev, class: e.target.value }))
+                                    }
+                                />
+                            </div>
+
+                            <div className="flex gap-2 justify-end">
+                                <button
+                                    type="submit"
+                                    className="bg-teal-700 text-white px-4 py-2 rounded hover:bg-teal-800"
+                                >
+                                    Save
+                                </button>
+                                <button
+                                    type="button"
+                                    className="bg-gray-300 text-black px-4 py-2 rounded hover:bg-gray-400"
+                                    onClick={cancelEdit}
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* AUDIO RECORD AND WORDS*/}
+            {selectedUnit && (
+                // <div className='flex w-full'>
+                <div className='w-full h-full'>
+                    <div className="flex p-4 flex-col items-center">
+                        <div className="p-5 items-center">
+                            <h2>({filteredVocabs.length > 0 ? currentIndex + 1 : 0} / {filteredVocabs.length})</h2>
+                            <div className='min-h-[300px] flex items-center justify-center p-10'>
+                                <button
+                                    onClick={goToPrevious}
+                                    className={currentIndex === 0 ? "px-2 py-1 text-xl bg-gray-100 text-gray-300" :
+                                        "px-2 py-1 text-xl bg-gray-200 rounded hover:bg-gray-300"}
+                                >
+                                    ←
+                                </button>
+                                <h1 className="max-w-[500px] text-center text-3xl font-bold pl-10 pr-10">
+                                    {currentVocab ? currentVocab.french : 'No vocab'}
+                                </h1>
+                                <button
+                                    onClick={goToNext}
+                                    className={currentIndex === filteredVocabs.length - 1 ? "px-2 py-1 text-xl bg-gray-100 text-gray-300" :
+                                        "px-2 py-1 text-xl bg-gray-200 rounded hover:bg-gray-300"}
+                                >
+                                    →
+                                </button>
+                            </div>
+
+                            <div className='flex flex-col items-center'>
+                                <button
+                                    onClick={toggleRecording}
+                                    className={`px-4 py-2 ${isRecording ? 'bg-red-500' : 'bg-teal-800'} text-white rounded`}
+                                >
+                                    {isRecording ? "Stop Recording" : "Start Recording"}
+                                </button>
+                            </div>
+                        </div>
+
+                        {currentVocab.mp3_url && (
+                            <div>
+                                <audio ref={audioRef} controls src={currentVocab.mp3_url} className="mt-4" />
+                            </div>
+                        )}
+
+                        {currentVocab && (
+                            <div className="flex flex-col w-full mt-4 p-2 border-t border-gray-300 text-sm">
+                                <p><strong>French:</strong> {currentVocab.french}</p>
+                                <p><strong>English:</strong> {currentVocab.english}</p>
+                                <p><strong>Unit:</strong> {currentVocab.unit}</p>
+                                <p><strong>Class:</strong> {currentVocab.class}</p>
+                                <p className='break-words max-w-[300px]'><strong>MP3 URL:</strong> {currentVocab.mp3_url}</p>
+                                {currentVocab.mp3_url && (
+                                    <button
+                                        onClick={() => new Audio(`${currentVocab.mp3_url}`).play()}
+                                        className='bg-amber-500 cursor-pointer'
+                                    >
+                                        Play Audio
+                                    </button>
+                                )}
+                            </div>
+                        )}
+
+
+                    </div></div>
+                // </div>
+            )
             }
 
             {
