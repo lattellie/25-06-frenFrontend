@@ -49,7 +49,6 @@ export default function Uploadcsv({ isOpen, onClose, onSubmit, defaultclass }: P
                 return;
             }
             alert(`✅ Upload successful!\nInserted: ${uploadJson.insertedCount}\nSkipped (duplicates): ${uploadJson.skippedCount}`);
-
             if (uploadJson.success) {
                 setStatus("✅ Upload successful!");
                 // You can also call onSubmit here if needed

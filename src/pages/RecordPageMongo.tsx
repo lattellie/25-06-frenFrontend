@@ -101,9 +101,20 @@ export default function RecordPageMongo() {
             return;
         }
 
-        if (!window.confirm(`Are you sure you want to delete all vocab from unit "${selectedUnit}"?`)) {
-            return;
+        const confirmation = window.prompt(
+            `Are you sure you want to delete all vocab from unit "${selectedUnit}"?\n\nPlease type DELETE to confirm.`
+        );
+
+        if (confirmation !== "DELETE") {
+            return; // User didn't confirm
         }
+
+        // Continue with delete logic here
+
+
+        // if (!window.confirm(`Are you sure you want to delete all vocab from unit "${selectedUnit}"?`)) {
+        //     return;
+        // }
 
         try {
             const res = await fetch(`http://localhost:3001/delete-unit/${selectedUnit}`, {
@@ -345,7 +356,7 @@ export default function RecordPageMongo() {
                             onClick={() => setIsModalOpen(true)}>
                             <p
                                 onClick={() => setIsModalOpen(true)}
-                                className="h-8 w-8 flex items-center text-xl justify-center bg-amber-800 text-white rounded-3xl hover:bg-teal-700 transition"
+                                className="h-8 w-8 flex items-center text-xl justify-center bg-amber-800 text-white rounded-3xl hover:bg-sky-700 transition"
                             >
                                 <Plus className="w-5 h-5 text-white" />
                             </p>
@@ -485,7 +496,7 @@ export default function RecordPageMongo() {
                             <button
                                 onClick={handleDeleteUnit}
                                 disabled={!selectedUnit}
-                                className={`px-4 py-1 bg-teal-700 text-white hover:bg-teal-800 rounded-xl
+                                className={`px-4 py-1 bg-sky-900 text-white hover:bg-sky-800 rounded-xl
                                 ${selectedUnit ? "" : "hidden"}
                                 `}
                             >
@@ -502,7 +513,7 @@ export default function RecordPageMongo() {
                                             <div
                                                 key={word._id}
                                                 className={`flex items-center justify-between cursor-pointer
-                                                    ${isCurrent ? '!bg-yellow-300' : ''}
+                                                    ${isCurrent ? '!bg-[rgba(120,53,15,0.15)]' : ''}
                                                     hover:bg-[rgba(120,53,15,0.05)]`}
                                                 onClick={() => {
                                                     const index = filteredVocabs.findIndex((v) => v._id === word._id);
@@ -598,7 +609,7 @@ export default function RecordPageMongo() {
                             <div className="flex gap-2 justify-end">
                                 <button
                                     type="submit"
-                                    className="bg-teal-700 text-white px-4 py-2 rounded hover:bg-teal-800"
+                                    className="bg-sky-700 text-white px-4 py-2 rounded hover:bg-sky-800"
                                 >
                                     Save
                                 </button>
@@ -619,7 +630,7 @@ export default function RecordPageMongo() {
             {selectedUnit && (
                 // <div className='flex w-full'>
                 <div className='w-full h-full'>
-                    <div className="flex p-4 flex-col items-center">
+                    <div className="flex p-4 flex-col items-center bg">
                         <div className="p-5 items-center">
                             <h2>({filteredVocabs.length > 0 ? currentIndex + 1 : 0} / {filteredVocabs.length})</h2>
                             <div className='min-h-[300px] flex items-center justify-center p-10'>
@@ -645,34 +656,29 @@ export default function RecordPageMongo() {
                             <div className='flex flex-col items-center'>
                                 <button
                                     onClick={toggleRecording}
-                                    className={`px-4 py-2 ${isRecording ? 'bg-red-500' : 'bg-teal-800'} text-white rounded`}
+                                    className={`px-4 py-2 ${isRecording ? 'bg-amber-800' : 'bg-sky-900'} text-white rounded`}
                                 >
                                     {isRecording ? "Stop Recording" : "Start Recording"}
                                 </button>
                             </div>
                         </div>
 
-                        {currentVocab.mp3_url && (
+                        {currentVocab && currentVocab.mp3_url && (
                             <div>
                                 <audio ref={audioRef} controls src={currentVocab.mp3_url} className="mt-4" />
                             </div>
                         )}
 
                         {currentVocab && (
-                            <div className="flex flex-col w-full mt-4 p-2 border-t border-gray-300 text-sm">
-                                <p><strong>French:</strong> {currentVocab.french}</p>
-                                <p><strong>English:</strong> {currentVocab.english}</p>
-                                <p><strong>Unit:</strong> {currentVocab.unit}</p>
-                                <p><strong>Class:</strong> {currentVocab.class}</p>
-                                <p className='break-words max-w-[300px]'><strong>MP3 URL:</strong> {currentVocab.mp3_url}</p>
-                                {currentVocab.mp3_url && (
-                                    <button
-                                        onClick={() => new Audio(`${currentVocab.mp3_url}`).play()}
-                                        className='bg-amber-500 cursor-pointer'
-                                    >
-                                        Play Audio
-                                    </button>
-                                )}
+                            <div className="flex flex-col w-full mt-4 p-2 text-sm items-center pt-10">
+                                <div className='w-[300px]'>
+                                    <p><strong>* French:</strong> {currentVocab.french}</p>
+                                    <p><strong>* English:</strong> {currentVocab.english}</p>
+                                    <p><strong>* Unit:</strong> {currentVocab.unit}</p>
+                                    <p><strong>* Class:</strong> {currentVocab.class}</p>
+                                    <p><strong>* MP3 URL:</strong></p>
+                                    <p className='break-words pl-4'>{currentVocab.mp3_url}</p>
+                                </div>
                             </div>
                         )}
 
@@ -697,6 +703,7 @@ export default function RecordPageMongo() {
                 onClose={() => setIsModalOpen(false)}
                 onSubmit={(unit, className, file) => {
                     handleUploadDone(unit, className, file); // sends file to backend
+                    fetchVocab()
                     setSelectedClass(className);   // 👈 this happens in the main page
                     setSelectedUnit(unit);         // 👈 and this too
                 }}
