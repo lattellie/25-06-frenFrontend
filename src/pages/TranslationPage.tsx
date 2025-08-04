@@ -1,7 +1,9 @@
 import { Box, Button, Typography, useTheme } from "@mui/material";
 import {
   useShowEnglishContext,
+  useSpeedContext,
   useUseAccentContext,
+  useUseAudioContext,
   useVocabUnitContext,
 } from "../contexts/VocabContext";
 import type { VocabBackend } from "../type/vocabDD";
@@ -104,13 +106,14 @@ function playMp3(url: string): Promise<void> {
     audio.play();
   });
 }
-export default function DictationPage() {
+export default function TranslationPage() {
   const theme = useTheme();
-  //   const { vocabs } = useVocabContext();
-  const { units } = useVocabUnitContext();
-  const { showEnglish, setShowEnglish } = useShowEnglishContext();
+  const { useAudio, setUseAudio } = useUseAudioContext();
   const { useAccent, setUseAccent } = useUseAccentContext();
-
+  const { speed, setSpeed } = useSpeedContext();
+  const [falling, setFalling] = useState(true); // is word falling?
+  const [startTime, setStartTime] = useState<number | null>(null); // animation start time
+  const [duration, setDuration] = useState<number>(1000); // e.g. 5 seconds to reach bottom
   const vocabs: VocabBackend[] = useSelector(
     (state: RootState) => state.vocab.filteredData
   );
@@ -125,40 +128,91 @@ export default function DictationPage() {
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [nowSubmit, setNowSubmit] = useState<boolean>(true);
   const [typing, setTyping] = useState<string>("");
+  const [frozenTransform, setFrozenTransform] = useState<string | null>(null);
+  const [target, setTarget] = useState<string>("");
+  const [targetNoSpace, setTargetNoSpace] = useState<string>("");
 
-  let target = "";
-  if (currVocabs.length > 0) {
-    target = currVocabs[currentIndex].french;
-  }
-  const targetNoSpace = target.replace(/\s/g, "");
-
-  const handleSubmit = async (e: { preventDefault: () => void }) => {
-    if (currVocabs.length === 0) {
-      e.preventDefault();
-    } else if (firstLoad) {
+  useEffect(() => {
+    if (!firstLoad && currVocabs.length > 0) {
+      setStartTime(Date.now());
       playAudio(currVocabs[currentIndex]);
       setNowSubmit(true);
-    } else if (nowSubmit) {
+      setTarget(currVocabs[currentIndex].french);
+      setTargetNoSpace(target.replace(/\s/g, ""));
+    }
+  }, [currentIndex]);
+
+  useEffect(() => {
+    setDuration(speed * 1000);
+  }, [speed]);
+
+  useEffect(() => {
+    setFalling(false);
+    setFrozenTransform(null);
+    const timeout = setTimeout(() => {
+      setFalling(true);
+    }, 50);
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [currVocabs, currentIndex]);
+
+  useEffect(() => {
+    if (!nowSubmit || currVocabs.length === 0) return;
+    const timer = setTimeout(() => {
+      handleSubmit({ preventDefault: () => {} });
+    }, duration);
+    return () => clearTimeout(timer);
+  }, [currentIndex, duration, nowSubmit, currVocabs]);
+
+  const handleSubmit = async (e: { preventDefault: () => void }) => {
+    console.log("handleSubmit");
+    if (currVocabs.length === 0) {
+      e.preventDefault();
+      return;
+    } else if (firstLoad) {
+      setFirstLoad(false);
+      setFalling(false);
+      setTimeout(() => {
+        setFalling(true);
+      }, 50);
+      setStartTime(Date.now());
+      playAudio(currVocabs[currentIndex]);
+      setNowSubmit(true);
+      return;
+    }
+    const fallingDiv = document.getElementById("falling-word");
+    if (fallingDiv) {
+      // Get computed style transform matrix
+      const style = window.getComputedStyle(fallingDiv);
+      const matrix: string = style.transform;
+      if (matrix && matrix !== "none") {
+        const match = matrix.match(/matrix.*\((.+)\)/);
+        if (match && match[1]) {
+          const values = match[1].split(", ");
+          const translateX = parseFloat(values[4]);
+          const translateY = parseFloat(values[5]);
+          setFrozenTransform(`translate(${translateX}px, ${translateY}px)`);
+        } else {
+          setFrozenTransform(null); // fallback if parsing fails
+        }
+      } else {
+        setFrozenTransform(null);
+      }
+    }
+    setFalling(false);
+
+    if (nowSubmit) {
       e.preventDefault();
       const userAnswer = typing.trim().toLowerCase();
       if (
         userAnswer ===
-        currVocabs[currentIndex].french.replace(/\s/g, "").toLowerCase()
-      ) {
-        await playMp3("/correct1.mp3");
-        const updated = currVocabs.filter((_, i) => i !== currentIndex);
-        setCurrVocabs(updated);
-        setTyping("");
-        if (updated.length > 0) {
-          setCurrentIndex(currentIndex % updated.length);
-          playAudio(updated[currentIndex]);
-        }
-      } else if (
-        !useAccent &&
-        noAccentEqual(
-          userAnswer,
-          currVocabs[currentIndex].french.replace(/\s/g, "").toLowerCase()
-        )
+          currVocabs[currentIndex].french.replace(/\s/g, "").toLowerCase() ||
+        (!useAccent &&
+          noAccentEqual(
+            userAnswer,
+            currVocabs[currentIndex].french.replace(/\s/g, "").toLowerCase()
+          ))
       ) {
         await playMp3("/correct1.mp3");
         const updated = currVocabs.filter((_, i) => i !== currentIndex);
@@ -209,7 +263,7 @@ export default function DictationPage() {
     ) {
       setTyping(typing.concat(e.key));
     } else if (e.key === "Enter") {
-      e.preventDefault();
+      // e.preventDefault();
       handleSubmit(e);
     }
   };
@@ -275,40 +329,10 @@ export default function DictationPage() {
     );
   }
 
-  function titleItem(title: string) {
-    return (
-      <Button
-        key={title}
-        sx={{
-          backgroundColor: theme.palette.yellow.main,
-          color: theme.palette.yellow.contrastText,
-          m: 0,
-          p: "4px",
-          pl: "10px",
-          display: "flex",
-          justifyContent: "space-between",
-          width: "100%",
-          maxWidth: "250px",
-          borderColor: theme.palette.brown.main,
-          borderStyle: "solid",
-          borderWidth: "2px",
-          borderRadius: "2rem",
-          textTransform: "none",
-          gap: 1,
-          minWidth: "fit-content",
-          height: "fit-content",
-          "&:hover": {
-            backgroundColor: theme.palette.beige.dark,
-          },
-        }}
-      >
-        <Typography variant="body2" sx={{}}>
-          {title}
-        </Typography>
-      </Button>
-    );
-  }
   function playAudio(vocab: VocabBackend) {
+    if (!useAudio) {
+      return;
+    }
     const french: string = vocab.french;
     if (vocab.mp3_url != "") {
       const audio = new Audio(vocab.mp3_url);
@@ -349,20 +373,19 @@ export default function DictationPage() {
           <form
             onSubmit={(e) => {
               handleSubmit(e);
-              setFirstLoad(false);
             }}
             className="p-2 bg-white border-b-[3px] border-black flex-1 pl-4 flex flex-col gap-2 overflow-x-scroll h-full justify-center items-center"
           >
             <div
               className="text-[30px] gap-2 flex flex-row m-0 cursor-pointer"
-              onClick={() => setShowEnglish(!showEnglish)}
+              onClick={() => setUseAudio(!useAudio)}
             >
-              {showEnglish ? (
+              {useAudio ? (
                 <MdCheckBox className="text-sky-900" />
               ) : (
                 <MdCheckBoxOutlineBlank className="text-sky-900" />
               )}
-              <h6 className="text-lg">Display English translation</h6>
+              <h6 className="text-lg">Play French audio</h6>
             </div>
 
             <div
@@ -375,6 +398,26 @@ export default function DictationPage() {
                 <MdCheckBoxOutlineBlank className="text-sky-900" />
               )}
               <h6 className="text-lg">Test me with accent</h6>
+            </div>
+
+            <div className="flex flex-col gap-2 mb-4">
+              <label
+                htmlFor="speed"
+                className="text-lg text-sky-900 font-medium"
+              >
+                Question Speed: {speed}
+              </label>
+              <input
+                type="range"
+                id="speed"
+                name="speed"
+                min="1"
+                max="10"
+                step="1"
+                value={speed}
+                onChange={(e) => setSpeed(Number(e.target.value))}
+                className="w-full accent-sky-900"
+              />
             </div>
 
             <button
@@ -421,20 +464,31 @@ export default function DictationPage() {
         <div className="p-2 pl-4 flex-1 flex flex-col gap-2 overflow-x-scroll h-full justify-center items-center bg-white border-b-[3px] border-black">
           {currVocabs.length > 0 ? (
             <>
-              <div
-                className="m-0 p-0 cursor-pointer text-cyan-400 transition-colors duration-300 hover:text-sky-900"
-                onClick={() => playAudio(currVocabs[currentIndex])}
-              >
-                <FaCirclePlay fontSize="100px" />
-              </div>
-
-              {showEnglish && (
-                <h1 className="text-2xl mb-2">
+              <div className="relative bg-amber-100 flex-3/4 w-full overflow-hidden">
+                <div
+                  id="falling-word"
+                  className="absolute h-full top-0 bg-amber-400 left-1/2 transform -translate-x-1/2 text-2xl font-bold ease-linear"
+                  style={{
+                    transitionProperty: frozenTransform ? "none" : "transform",
+                    transitionDuration: frozenTransform
+                      ? "0ms"
+                      : falling
+                      ? `${duration}ms`
+                      : "0ms",
+                    transform: frozenTransform
+                      ? frozenTransform
+                      : falling
+                      ? "translateX(-50%) translateY(90%)"
+                      : "translateX(-50%) translateY(0)",
+                  }}
+                >
                   {currVocabs[currentIndex].english}
-                </h1>
-              )}
-
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                </div>
+              </div>
+              <form
+                onSubmit={handleSubmit}
+                className="flex-1/4 bg-amber-200 flex flex-col gap-4"
+              >
                 {textBox()}
                 <button
                   type="submit"

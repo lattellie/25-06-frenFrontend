@@ -4,10 +4,19 @@ export interface VocabEntry {
 }
 
 export interface Vocab {
-    vocab: VocabEntry;
-    selected: boolean
+  vocab: VocabBackend;
+  selected: boolean
 }
 export interface VocabUnit {
-    name: string;
-    vocabs: Vocab[];
+  name: string;
+  vocabs: Vocab[];
+}
+
+export interface VocabBackend {
+  _id: string;
+  french: string;
+  english: string;
+  unit: string;
+  class: string;
+  mp3_url: string;
 }
