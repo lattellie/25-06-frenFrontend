@@ -543,7 +543,7 @@ export default function RecordPageMongo() {
                                         )
                                     })
                                 ) : (
-                                    <p className="text-gray-400">Select a unit to see vocabulary</p>
+                                    <p>Select a unit to see vocabulary</p>
                                 )}
                             </div>
                         </div>

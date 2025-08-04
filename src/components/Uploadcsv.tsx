@@ -87,15 +87,28 @@ export default function Uploadcsv({ isOpen, onClose, onSubmit, defaultclass }: P
                     className="w-full border border-gray-300 p-2 rounded mb-4"
                 />
 
-                <label className="block mb-2">Upload CSV</label>
-                <input
-                    type="file"
-                    accept=".csv"
-                    onChange={(e) => setFile(e.target.files?.[0] || null)}
-                    className="mb-4"
-                />
+                <div className="mb-4">
 
-                {status && <p className="mb-4">{status}</p>}
+                    <div className="flex items-center gap-4">
+                        {/* Custom button */}
+                        <label className="bg-amber-900 text-white px-4 py-2 rounded cursor-pointer hover:bg-amber-700">
+                            Choose File
+                            <input
+                                type="file"
+                                accept=".csv"
+                                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                                className="hidden"
+                            />
+                        </label>
+
+                        {/* Display file name or placeholder */}
+                        <span className="text-amber-900 text-sm">
+                            {file ? file.name : "No file chosen"}
+                        </span>
+                    </div>
+                </div>
+
+                {status && <p className="mb-4 text-sm">{status}</p>}
 
                 <div className="flex justify-end gap-2">
                     <button
@@ -113,7 +126,7 @@ export default function Uploadcsv({ isOpen, onClose, onSubmit, defaultclass }: P
 
                     <button
                         onClick={handleSubmit}
-                        className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700"
+                        className="px-4 py-2 bg-sky-900 text-white rounded hover:bg-sky-700"
                     >
                         Submit
                     </button>
