@@ -32,7 +32,7 @@ export default function App() {
         <Route path="/upload" element={<UploadAudio />}></Route>
         <Route path="/mongo" element={<AddMongo />} />
         <Route path="/recordmongo" element={<RecordPageMongo />} />
-        <Route path="/recordmongo2" element={<RecordPageMongo2 />} />
+        <Route path="/uploaddata" element={<RecordPageMongo2 />} />
       </Routes>
     </Router>
   );
