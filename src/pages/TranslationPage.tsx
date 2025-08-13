@@ -1,11 +1,11 @@
 import { Box, Typography, useTheme } from "@mui/material";
 import {
-  useShowEnglishContext,
+  useSpeedContext,
   useUseAccentContext,
+  useUseAudioContext,
 } from "../contexts/VocabContext";
 import type { VocabBackend } from "../type/vocabDD";
-import { FaCirclePlay } from "react-icons/fa6";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MdCheckBox, MdCheckBoxOutlineBlank } from "react-icons/md";
 import { useSelector } from "react-redux";
@@ -113,10 +113,13 @@ const stubVocabBackend: VocabBackend = {
   mp3_url: ''
 } as VocabBackend
 
-export default function DictationPage() {
+export default function TranslationPage() {
   const theme = useTheme();
+  const { useAudio, setUseAudio } = useUseAudioContext();
   const { useAccent, setUseAccent } = useUseAccentContext();
-  const { showEnglish, setShowEnglish } = useShowEnglishContext();
+  const { speed, setSpeed } = useSpeedContext();
+  const [falling, setFalling] = useState(true);
+  const [duration, setDuration] = useState<number>(1000);
   const vocabs: VocabBackend[] = useSelector(
     (state: RootState) => state.vocab.filteredData
   );
@@ -131,10 +134,40 @@ export default function DictationPage() {
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [nowSubmit, setNowSubmit] = useState<boolean>(true); // if it's displaying answer or submitting
   const [typing, setTyping] = useState<string>("");
+  const [frozenTransform, setFrozenTransform] = useState<string | null>(null);
   const [target, setTarget] = useState<VocabBackend>(stubVocabBackend);
   const [targetNoSpace, setTargetNoSpace] = useState<string>("");
-
+  const [wordFlag, setWordFlag] = useState<boolean>(true)
   const [finishPracticing, setFinishPracticing] = useState<boolean>(false);
+  const isSubmittingRef = useRef(false);
+
+  useEffect(() => {
+    setDuration(speed * 1000);
+  }, [speed]);
+
+  useEffect(() => {
+    setFalling(false);
+    setFrozenTransform(null);
+  }, [wordFlag]);
+
+  useEffect(() => {
+    if (falling === false) {
+      const timeout = setTimeout(() => {
+        setFalling(true);
+      }, 50);
+      return () => clearTimeout(timeout);
+    }
+  }, [falling]);
+
+
+  useEffect(() => {
+    if (!nowSubmit || finishPracticing) return;
+    const timer = setTimeout(() => {
+      handleWordSubmit({ preventDefault: () => { } });
+    }, duration);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duration, finishPracticing, nowSubmit]);
 
   useEffect(() => {
     setTargetNoSpace(target.french.replace(/\s/g, ""));
@@ -220,6 +253,9 @@ export default function DictationPage() {
   }
 
   async function playAudio(vocab: VocabBackend) {
+    if (!useAudio) {
+      return;
+    }
     const french: string = vocab.french;
     if (vocab.mp3_url != "") {
       const audio = new Audio(vocab.mp3_url);
@@ -248,7 +284,14 @@ export default function DictationPage() {
       await updateAndGetNewWords()
     }
   }
+
   const handleWordSubmit = async (e: { preventDefault: () => void }) => {
+    if (isSubmittingRef.current) {
+      console.log("unable to submit")
+      return
+    }
+    console.log("able to submit")
+    isSubmittingRef.current = true;
     e.preventDefault();
     console.log("typing:", typing);
     const userAnswer = typing.trim().toLowerCase();
@@ -267,23 +310,54 @@ export default function DictationPage() {
     }
     setTyping(target.french.replace(/\s/g, ""));
     setNowSubmit(false);
+
+    const fallingDiv = document.getElementById("falling-word");
+    if (fallingDiv) {
+      const style = window.getComputedStyle(fallingDiv);
+      const matrix: string = style.transform;
+      if (matrix && matrix !== "none") {
+        const match = matrix.match(/matrix.*\((.+)\)/);
+        console.log("match: ", match);
+        if (match && match[1]) {
+          const values = match[1].split(", ");
+          const translateX = parseFloat(values[4]);
+          const translateY = parseFloat(values[5]);
+          setFrozenTransform(`translate(${translateX}px, ${translateY}px)`);
+        } else {
+          setFrozenTransform(null);
+        }
+      } else {
+        setFrozenTransform(null);
+      }
+    }
+    setFalling(false);
+    isSubmittingRef.current = false;
   }
   const gameInterface = () => {
     return (
-      <div className="p-2 pl-4 flex-1 flex flex-col gap-2 overflow-x-scroll h-full justify-center items-center bg-white border-b-[3px] border-black">
+      <>
         {!finishPracticing ? (<>
-          <div
-            className="m-0 p-0 cursor-pointer text-cyan-400 transition-colors duration-300 hover:text-sky-900"
-            onClick={async () => {
-              await playAudio(target)
-            }}
-          >
-            <FaCirclePlay fontSize="100px" />
-          </div>
-          {showEnglish &&
-            <h1 className="text-2xl mb-2">
+          <div className="relative  flex-3/4 w-full overflow-hidden">
+            <div
+              id="falling-word"
+              className="absolute h-full top-0 left-1/2 transform -translate-x-1/2 text-2xl font-bold ease-linear"
+              style={{
+                transitionProperty: frozenTransform ? "none" : "transform",
+                transitionDuration: frozenTransform
+                  ? "0ms"
+                  : falling
+                    ? `${duration}ms`
+                    : "0ms",
+                transform: frozenTransform
+                  ? frozenTransform
+                  : falling
+                    ? "translateX(-50%) translateY(90%)"
+                    : "translateX(-50%) translateY(0)",
+              }}
+            >
               {target.english}
-            </h1>}
+            </div>
+          </div>
           <form onSubmit={
             (e) => {
               handleSubmitOrContinue(e)
@@ -300,22 +374,24 @@ export default function DictationPage() {
         </>) : (
           <h2 className="text-xl">Finish Practicing</h2>
         )}
-
-      </div>
-
+      </>
     )
   }
+  function updateIndex(randomIndex: number) {
+    setCurrentIndex(randomIndex);
+    setWordFlag(!wordFlag);
+  }
   async function updateAndGetNewWords() {
+    setTyping('');
     if (currVocabs.length > 0) {
       const randomIndex = Math.floor(Math.random() * currVocabs.length);
-      setCurrentIndex(randomIndex);
+      updateIndex(randomIndex);
       setTarget(currVocabs[randomIndex]);
       await playAudio(currVocabs[randomIndex]);
       setNowSubmit(true)
     } else {
       setFinishPracticing(true)
     }
-    setTyping('');
   }
 
   if (firstLoad) {
@@ -338,14 +414,14 @@ export default function DictationPage() {
           >
             <div
               className="text-[30px] gap-2 flex flex-row m-0 cursor-pointer"
-              onClick={() => setShowEnglish(!showEnglish)}
+              onClick={() => setUseAudio(!useAudio)}
             >
-              {showEnglish ? (
+              {useAudio ? (
                 <MdCheckBox className="text-sky-900" />
               ) : (
                 <MdCheckBoxOutlineBlank className="text-sky-900" />
               )}
-              <h6 className="text-lg">Display English translation</h6>
+              <h6 className="text-lg">Play French audio</h6>
             </div>
 
             <div
@@ -359,6 +435,27 @@ export default function DictationPage() {
               )}
               <h6 className="text-lg">Test me with accent</h6>
             </div>
+
+            <div className="flex flex-col gap-2 mb-4">
+              <label
+                htmlFor="speed"
+                className="text-lg text-sky-900 font-medium"
+              >
+                Question Speed: {speed}
+              </label>
+              <input
+                type="range"
+                id="speed"
+                name="speed"
+                min="6"
+                max="20"
+                step="2"
+                value={speed}
+                onChange={(e) => setSpeed(Number(e.target.value))}
+                className="w-full accent-sky-900"
+              />
+            </div>
+
             <button
               onClick={async () => {
                 setFirstLoad(false)
