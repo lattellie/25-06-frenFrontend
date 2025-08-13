@@ -36,7 +36,7 @@ export default function Uploadcsv({ isOpen, onClose, onSubmit, defaultclass }: P
             formData.append("className", className);
             formData.append("csv", file);
 
-            const response = await fetch("http://localhost:3001/upload-csv", {
+            const response = await fetch(`${import.meta.env.VITE_BACKEND}/upload-csv`, {
                 method: "POST",
                 body: formData,
             });

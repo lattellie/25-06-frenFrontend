@@ -1,22 +1,15 @@
-import { Box, Button, Typography, useTheme } from "@mui/material";
-import { useVocabContext, useVocabUnitContext } from "../contexts/VocabContext";
+import { Box } from "@mui/material";
 import { FaCirclePlay } from "react-icons/fa6";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MdCheckBox, MdCheckBoxOutlineBlank } from "react-icons/md";
-import { FiChevronUp, FiChevronDown } from "react-icons/fi";
-
-import { getData, getTitles } from "../utils/getData";
 import {
   type Vocab,
-  type VocabUnit,
-  type VocabEntry,
   type VocabBackend,
 } from "../type/vocabDD";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch, RootState } from "../store/store";
-import { fetchUnitClassData, type UnitClass } from "../slices/unitClassSlice";
-import { fetchVocabData, updateFilteredData } from "../slices/vocabSlice";
+import { fetchUnitClassData } from "../slices/unitClassSlice";
 
 function useVoices() {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -45,8 +38,6 @@ function useVoices() {
 }
 
 export default function VocabPage() {
-  const theme = useTheme();
-  const { units, setUnits } = useVocabUnitContext();
   const voices = useVoices();
   const vocabData = useSelector((state: RootState) => state.vocab.data);
   const dispatch = useDispatch<AppDispatch>();
@@ -65,27 +56,14 @@ export default function VocabPage() {
     );
   }, [vocabData]);
 
-  function selectAll(currUnit: VocabUnit, allChosen: boolean) {
-    setUnits(
-      units.map((u: { name: string; vocabs: Vocab[] }) =>
-        u.name === currUnit.name
-          ? {
-              ...u,
-              vocabs: u.vocabs.map((v) => ({ ...v, selected: !allChosen })),
-            }
-          : u
-      )
-    );
-  }
   function vocabItem(vocab: Vocab, index: number) {
     const voc = vocab.vocab;
     const selected = vocab.selected;
     const isEven = index % 2 === 0;
     return (
       <div
-        className={`flex border-b-[3px] ${
-          isEven ? "bg-sky-100" : "bg-white"
-        } border-gray-300 pl-4 py-1 items-center`}
+        className={`flex border-b-[3px] ${isEven ? "bg-sky-100" : "bg-white"
+          } border-gray-300 pl-4 py-1 items-center`}
       >
         {/* Select checkbox button */}
         <button
@@ -104,9 +82,8 @@ export default function VocabPage() {
         {/* Play audio button */}
         <button
           onClick={() => playAudio(voc)}
-          className={`text-xl cursor-pointer mr-4  ${
-            voc.mp3_url === "" ? "text-cyan-500" : "text-cyan-800"
-          } p-0 m-0`}
+          className={`text-xl cursor-pointer mr-4  ${voc.mp3_url === "" ? "text-cyan-500" : "text-cyan-800"
+            } p-0 m-0`}
         >
           <FaCirclePlay />
         </button>
@@ -119,39 +96,6 @@ export default function VocabPage() {
         {/* English translation */}
         <div className="w-full">{voc.english}</div>
       </div>
-    );
-  }
-  function titleItem(title: string) {
-    return (
-      <Button
-        key={title}
-        sx={{
-          backgroundColor: theme.palette.yellow.main,
-          color: theme.palette.yellow.contrastText,
-          m: 0,
-          p: "4px",
-          pl: "10px",
-          display: "flex",
-          justifyContent: "space-between",
-          width: "100%",
-          maxWidth: "250px",
-          borderColor: theme.palette.brown.main,
-          borderStyle: "solid",
-          borderWidth: "2px",
-          borderRadius: "2rem",
-          textTransform: "none",
-          gap: 1,
-          minWidth: "fit-content",
-          height: "fit-content",
-          "&:hover": {
-            backgroundColor: theme.palette.beige.dark,
-          },
-        }}
-      >
-        <Typography variant="body2" sx={{}}>
-          {title}
-        </Typography>
-      </Button>
     );
   }
   function playAudio(vocab: VocabBackend) {
@@ -215,46 +159,35 @@ export default function VocabPage() {
                 {vocabList.map((v, i) => vocabItem(v, i))}
               </div>
               <div className="flex flex-row gap-2 justify-end py-2">
-                <Button
-                  sx={{
-                    backgroundColor: theme.palette.brown.main,
-                    color: theme.palette.brown.contrastText,
-                    borderRadius: "5rem",
-                    width: "10vw",
-                    "&:hover": {
-                      backgroundColor: theme.palette.brown.dark,
-                    },
-                  }}
-                  onClick={() => {
-                    navigate("/");
-                  }}
+                <div
+                  className="text-black rounded-full py-2"
+                >
+                  Continue Learning:
+                </div>
+                <button
+                  className="bg-sky-900 text-white rounded-full hover:bg-sky-950 px-4 py-2"
+                  onClick={() => navigate("/translation")}
+                >
+                  Translation
+                </button>
+
+                <button
+                  className="bg-sky-900 text-white rounded-full hover:bg-sky-950 px-4 py-2"
+                  onClick={() => navigate("/play")}
+                >
+                  Dictation
+                </button>
+                <div
+                  className="text-black rounded-full py-2"
+                >
+                  End Session:
+                </div>
+                <button
+                  className="bg-amber-300 text-black rounded-full hover:bg-amber-400 px-4 py-2"
+                  onClick={() => navigate("/")}
                 >
                   Back To Home
-                </Button>
-                <Button
-                  sx={{
-                    backgroundColor: theme.palette.brown.main,
-                    color: theme.palette.brown.contrastText,
-                    borderRadius: "5rem",
-                    width: "10vw",
-                    "&:hover": {
-                      backgroundColor: theme.palette.brown.dark,
-                    },
-                  }}
-                  onClick={() => {
-                    const selectedList: VocabBackend[] = vocabList
-                      .filter((v) => v.selected)
-                      .map((r) => r.vocab);
-                    if (selectedList.length > 0) {
-                      dispatch(updateFilteredData(selectedList));
-                      navigate("/play");
-                    } else {
-                      alert("select at least 1 vocab to continue");
-                    }
-                  }}
-                >
-                  Restart
-                </Button>{" "}
+                </button>
               </div>
             </div>
           </div>

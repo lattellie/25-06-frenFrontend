@@ -1,8 +1,7 @@
-import { Box, Button, Typography, useTheme } from "@mui/material";
+import { Box, Typography, useTheme } from "@mui/material";
 import {
   useShowEnglishContext,
   useUseAccentContext,
-  useVocabUnitContext,
 } from "../contexts/VocabContext";
 import type { VocabBackend } from "../type/vocabDD";
 import { FaCirclePlay } from "react-icons/fa6";
@@ -104,13 +103,20 @@ function playMp3(url: string): Promise<void> {
     audio.play();
   });
 }
+
+const stubVocabBackend: VocabBackend = {
+  _id: '0',
+  french: '0',
+  english: '0',
+  unit: '0',
+  class: '0',
+  mp3_url: ''
+} as VocabBackend
+
 export default function DictationPage() {
   const theme = useTheme();
-  //   const { vocabs } = useVocabContext();
-  const { units } = useVocabUnitContext();
-  const { showEnglish, setShowEnglish } = useShowEnglishContext();
   const { useAccent, setUseAccent } = useUseAccentContext();
-
+  const { showEnglish, setShowEnglish } = useShowEnglishContext();
   const vocabs: VocabBackend[] = useSelector(
     (state: RootState) => state.vocab.filteredData
   );
@@ -123,76 +129,16 @@ export default function DictationPage() {
     shuffleArray(vocabs)
   );
   const [currentIndex, setCurrentIndex] = useState<number>(0);
-  const [nowSubmit, setNowSubmit] = useState<boolean>(true);
+  const [nowSubmit, setNowSubmit] = useState<boolean>(true); // if it's displaying answer or submitting
   const [typing, setTyping] = useState<string>("");
+  const [target, setTarget] = useState<VocabBackend>(stubVocabBackend);
+  const [targetNoSpace, setTargetNoSpace] = useState<string>("");
 
-  let target = "";
-  if (currVocabs.length > 0) {
-    target = currVocabs[currentIndex].french;
-  }
-  const targetNoSpace = target.replace(/\s/g, "");
+  const [finishPracticing, setFinishPracticing] = useState<boolean>(false);
 
-  const handleSubmit = async (e: { preventDefault: () => void }) => {
-    if (currVocabs.length === 0) {
-      e.preventDefault();
-    } else if (firstLoad) {
-      playAudio(currVocabs[currentIndex]);
-      setNowSubmit(true);
-    } else if (nowSubmit) {
-      e.preventDefault();
-      const userAnswer = typing.trim().toLowerCase();
-      if (
-        userAnswer ===
-        currVocabs[currentIndex].french.replace(/\s/g, "").toLowerCase()
-      ) {
-        await playMp3("/correct1.mp3");
-        const updated = currVocabs.filter((_, i) => i !== currentIndex);
-        setCurrVocabs(updated);
-        setTyping("");
-        if (updated.length > 0) {
-          setCurrentIndex(currentIndex % updated.length);
-          playAudio(updated[currentIndex]);
-        }
-      } else if (
-        !useAccent &&
-        noAccentEqual(
-          userAnswer,
-          currVocabs[currentIndex].french.replace(/\s/g, "").toLowerCase()
-        )
-      ) {
-        await playMp3("/correct1.mp3");
-        const updated = currVocabs.filter((_, i) => i !== currentIndex);
-        setCurrVocabs(updated);
-        setTyping("");
-        if (updated.length > 0) {
-          setCurrentIndex(currentIndex % updated.length);
-          playAudio(updated[currentIndex]);
-        }
-      } else {
-        await playMp3("/wrong.mp3");
-        setTyping(currVocabs[currentIndex].french.replace(/\s/g, ""));
-        playAudio(currVocabs[currentIndex]);
-        setNowSubmit(false);
-      }
-    } else {
-      e.preventDefault();
-      const removed = currVocabs[currentIndex];
-      const updated = currVocabs.filter((_, i) => i !== currentIndex);
-      const randomIndex = Math.floor(Math.random() * (updated.length + 1));
-      const newVocabs = [
-        ...updated.slice(0, randomIndex),
-        removed,
-        ...updated.slice(randomIndex),
-      ];
-      setCurrVocabs(newVocabs);
-      setTyping("");
-      setNowSubmit(true);
-      if (updated.length > 0) {
-        setCurrentIndex(currentIndex % updated.length);
-        playAudio(updated[currentIndex]);
-      }
-    }
-  };
+  useEffect(() => {
+    setTargetNoSpace(target.french.replace(/\s/g, ""));
+  }, [target]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "Backspace") {
@@ -209,14 +155,13 @@ export default function DictationPage() {
     ) {
       setTyping(typing.concat(e.key));
     } else if (e.key === "Enter") {
-      e.preventDefault();
-      handleSubmit(e);
+      handleSubmitOrContinue(e);
     }
   };
 
   function textBox() {
     let temp = 0;
-    const showString = target
+    const showString = target.french
       .split("")
       .map((char, i) => {
         if (char === " ") {
@@ -230,7 +175,6 @@ export default function DictationPage() {
     return (
       <Box
         tabIndex={0}
-        onKeyDown={(e) => handleKeyDown(e)}
         sx={{
           backgroundColor: nowSubmit
             ? theme.palette.white.main
@@ -275,44 +219,11 @@ export default function DictationPage() {
     );
   }
 
-  function titleItem(title: string) {
-    return (
-      <Button
-        key={title}
-        sx={{
-          backgroundColor: theme.palette.yellow.main,
-          color: theme.palette.yellow.contrastText,
-          m: 0,
-          p: "4px",
-          pl: "10px",
-          display: "flex",
-          justifyContent: "space-between",
-          width: "100%",
-          maxWidth: "250px",
-          borderColor: theme.palette.brown.main,
-          borderStyle: "solid",
-          borderWidth: "2px",
-          borderRadius: "2rem",
-          textTransform: "none",
-          gap: 1,
-          minWidth: "fit-content",
-          height: "fit-content",
-          "&:hover": {
-            backgroundColor: theme.palette.beige.dark,
-          },
-        }}
-      >
-        <Typography variant="body2" sx={{}}>
-          {title}
-        </Typography>
-      </Button>
-    );
-  }
-  function playAudio(vocab: VocabBackend) {
+  async function playAudio(vocab: VocabBackend) {
     const french: string = vocab.french;
     if (vocab.mp3_url != "") {
       const audio = new Audio(vocab.mp3_url);
-      audio.play();
+      await audio.play();
     } else {
       if (!french || voices.length === 0) {
         console.warn("Voices not loaded yet");
@@ -330,14 +241,90 @@ export default function DictationPage() {
     }
   }
 
+  const handleSubmitOrContinue = async (e: { preventDefault: () => void }) => {
+    if (nowSubmit) {
+      await handleWordSubmit(e)
+    } else {
+      await updateAndGetNewWords()
+    }
+  }
+  const handleWordSubmit = async (e: { preventDefault: () => void }) => {
+    e.preventDefault();
+    console.log("typing:", typing);
+    const userAnswer = typing.trim().toLowerCase();
+    if (
+      (userAnswer === target.french.replace(/\s/g, "").toLowerCase())
+      || (!useAccent && noAccentEqual(
+        userAnswer,
+        target.french.replace(/\s/g, "").toLowerCase()
+      ))
+    ) {
+      await playMp3("/correct1.mp3");
+      const updated = currVocabs.filter((_, i) => i !== currentIndex);
+      setCurrVocabs(updated);
+    } else {
+      await playMp3("/wrong.mp3");
+    }
+    setTyping(target.french.replace(/\s/g, ""));
+    setNowSubmit(false);
+  }
+  const gameInterface = () => {
+    return (
+      <div className="p-2 pl-4 flex-1 flex flex-col gap-2 overflow-x-scroll h-full justify-center items-center bg-white border-b-[3px] border-black">
+        {!finishPracticing ? (<>
+          <div
+            className="m-0 p-0 cursor-pointer text-cyan-400 transition-colors duration-300 hover:text-sky-900"
+            onClick={async () => {
+              await playAudio(target)
+            }}
+          >
+            <FaCirclePlay fontSize="100px" />
+          </div>
+          {showEnglish &&
+            <h1 className="text-2xl mb-2">
+              {target.english}
+            </h1>}
+          <form onSubmit={
+            (e) => {
+              handleSubmitOrContinue(e)
+            }
+          } className="flex flex-col gap-4">
+            {textBox()}
+            <button
+              type="submit"
+              className="bg-sky-900 text-white px-4 py-2 rounded hover:bg-sky-950"
+            >
+              {nowSubmit ? "Submit" : "Continue"}
+            </button>
+          </form>
+        </>) : (
+          <h2 className="text-xl">Finish Practicing</h2>
+        )}
+
+      </div>
+
+    )
+  }
+  async function updateAndGetNewWords() {
+    if (currVocabs.length > 0) {
+      const randomIndex = Math.floor(Math.random() * currVocabs.length);
+      setCurrentIndex(randomIndex);
+      setTarget(currVocabs[randomIndex]);
+      await playAudio(currVocabs[randomIndex]);
+      setNowSubmit(true)
+    } else {
+      setFinishPracticing(true)
+    }
+    setTyping('');
+  }
+
   if (firstLoad) {
     return (
       <div className="flex h-[92vh]">
         <div className="w-full flex flex-col bg-cyan-50">
           <div className="p-2 pl-4 pt-0 min-h-fit h-[7vh] border-b-[3px] border-cyan-200 flex items-center justify-between">
-            <p>{`Current Progress: ${vocabs.length - currVocabs.length}/${
-              vocabs.length
-            }`}</p>
+            <p>{`Current Progress: ${vocabs.length - currVocabs.length}/${vocabs.length
+              }`}</p>
             <h2
               className="text-sky-900 text-2xl cursor-pointer"
               onClick={() => navigate("/")}
@@ -346,11 +333,7 @@ export default function DictationPage() {
             </h2>
           </div>
 
-          <form
-            onSubmit={(e) => {
-              handleSubmit(e);
-              setFirstLoad(false);
-            }}
+          <div
             className="p-2 bg-white border-b-[3px] border-black flex-1 pl-4 flex flex-col gap-2 overflow-x-scroll h-full justify-center items-center"
           >
             <div
@@ -376,14 +359,16 @@ export default function DictationPage() {
               )}
               <h6 className="text-lg">Test me with accent</h6>
             </div>
-
             <button
-              type="submit"
+              onClick={async () => {
+                setFirstLoad(false)
+                await updateAndGetNewWords()
+              }}
               className="bg-sky-900 text-white px-6 py-2 rounded-xl hover:bg-sky-950 cursor-pointer"
             >
               <h4 className="text-xl">Start</h4>
             </button>
-          </form>
+          </div>
 
           <div className="flex p-4 justify-between pr-8">
             <button
@@ -406,9 +391,8 @@ export default function DictationPage() {
       <div className="w-full flex flex-col bg-cyan-50">
         <div className="p-2 pl-4 pt-0 min-h-fit border-b-[3px] border-cyan-50 h-[7vh] flex flex-row items-center justify-between">
           <p className="text-base">
-            {`Current Progress: ${vocabs.length - currVocabs.length}/${
-              vocabs.length
-            }`}
+            {`Current Progress: ${vocabs.length - currVocabs.length}/${vocabs.length
+              }`}
           </p>
           <h1
             className="text-2xl text-sky-900 cursor-pointer"
@@ -419,50 +403,22 @@ export default function DictationPage() {
         </div>
 
         <div className="p-2 pl-4 flex-1 flex flex-col gap-2 overflow-x-scroll h-full justify-center items-center bg-white border-b-[3px] border-black">
-          {currVocabs.length > 0 ? (
-            <>
-              <div
-                className="m-0 p-0 cursor-pointer text-cyan-400 transition-colors duration-300 hover:text-sky-900"
-                onClick={() => playAudio(currVocabs[currentIndex])}
-              >
-                <FaCirclePlay fontSize="100px" />
-              </div>
-
-              {showEnglish && (
-                <h1 className="text-2xl mb-2">
-                  {currVocabs[currentIndex].english}
-                </h1>
-              )}
-
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                {textBox()}
-                <button
-                  type="submit"
-                  className="bg-sky-900 text-white px-4 py-2 rounded hover:bg-sky-950"
-                >
-                  {nowSubmit ? "Submit" : "Continue"}
-                </button>
-              </form>
-            </>
-          ) : (
-            <h2 className="text-xl">Finish Practicing</h2>
-          )}
+          {gameInterface()}
         </div>
 
         <div className="flex p-4 justify-between pr-8">
           <button
-            className="bg-sky-900 text-white rounded-full py-2 px-4 hover:bg-sky-950 px-4 py-2"
+            className="bg-sky-900 text-white rounded-full hover:bg-sky-950 px-4 py-2"
             onClick={() => navigate("/")}
           >
             Back to Home
           </button>
 
           <button
-            className={`${
-              currVocabs.length !== 0
-                ? "bg-cyan-50"
-                : "bg-sky-900 hover:bg-sky-950"
-            } text-white rounded-full w-[10vw] px-4 py-2`}
+            className={`${currVocabs.length !== 0
+              ? "bg-cyan-50"
+              : "bg-sky-900 hover:bg-sky-950"
+              } text-white rounded-full w-[10vw] px-4 py-2`}
             onClick={() => navigate("/viewVocab")}
           >
             Next

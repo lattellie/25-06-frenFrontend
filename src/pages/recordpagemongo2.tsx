@@ -1,27 +1,21 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useState, useRef } from "react";
 import Uploadcsv from "../components/Uploadcsv";
 import {
   Trash2,
   Pencil,
-  X,
   Plus,
   Volume2,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
+import { useSpeakerAccentContext } from "../contexts/VocabContext";
+import { Accent, type VocabBackend } from "../type/vocabDD";
 
-type VocabItem = {
-  _id: string;
-  french: string;
-  english: string;
-  unit?: string;
-  class?: string;
-  mp3_url?: string;
-};
 
 export default function RecordPageMongo2() {
-  const [vocabData, setVocabData] = useState<VocabItem[]>([]);
+  const [vocabData, setVocabData] = useState<VocabBackend[]>([]);
   const [units, setUnits] = useState<string[]>([]);
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
   const [selectedClass, setSelectedClass] = useState<string | null>(null);
@@ -30,15 +24,14 @@ export default function RecordPageMongo2() {
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(
     null
   );
-  const [audioURL, setAudioURL] = useState<string | null>(null);
+  // const [audioURL, setAudioURL] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // const audioRef = useRef<HTMLAudioElement | null>(null);
   const [IsModalOpen, setIsModalOpen] = useState(false); // for the add csv pop up
   const chunks: Blob[] = [];
   const [IsEditing, setIsEditing] = useState(false); // for the add csv pop up
   const selectedRef = useRef<HTMLDivElement>(null);
   const [expandedClasses, setExpandedClasses] = useState<string[]>([]);
-
   const toggleClass = (cls: string) => {
     setExpandedClasses(
       (prev) =>
@@ -47,16 +40,26 @@ export default function RecordPageMongo2() {
           : [...prev, cls] // add it if not expanded
     );
   };
+  const { speakerAccent } = useSpeakerAccentContext()
 
-  const [editVocab, setEditVocab] = useState<VocabItem>({
+  const [shouldRecord, setShouldRecord] = useState<boolean>(false);
+  const [editVocab, setEditVocab] = useState<VocabBackend>({
     _id: "",
     french: "",
     english: "",
     unit: "",
     class: "",
     mp3_url: "",
+    qc_url: "",
+    tmp_url: ""
   });
 
+  useEffect(()=>{
+    if (shouldRecord) {
+      toggleRecording();
+      setShouldRecord(false);
+    }
+  },[shouldRecord])
   const cancelEdit = () => {
     setIsEditing(false);
   };
@@ -65,7 +68,7 @@ export default function RecordPageMongo2() {
     e.preventDefault();
 
     try {
-      const res = await fetch(`http://localhost:3001/vocab/${editVocab._id}`, {
+      const res = await fetch(`${import.meta.env.VITE_BACKEND}/vocab/${editVocab._id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -97,9 +100,8 @@ export default function RecordPageMongo2() {
       (!selectedUnit || v.unit === selectedUnit) &&
       (!selectedClass || v.class === selectedClass)
   );
-  const currentVocab = filteredVocabs[currentIndex];
 
-  // --- NEW: Function to delete selected unit ---
+  const currentVocab = filteredVocabs[currentIndex];
   const handleDeleteUnit = async () => {
     if (!selectedUnit) {
       alert("Please select a unit to delete.");
@@ -122,7 +124,7 @@ export default function RecordPageMongo2() {
 
     try {
       const res = await fetch(
-        `http://localhost:3001/delete-unit/${selectedUnit}`,
+        `${import.meta.env.VITE_BACKEND}/delete-unit/${selectedUnit}`,
         {
           method: "DELETE",
         }
@@ -156,7 +158,7 @@ export default function RecordPageMongo2() {
     if (!window.confirm("Are you sure you want to delete this vocab?")) return;
 
     try {
-      const res = await fetch(`http://localhost:3001/vocab/${vocabId}`, {
+      const res = await fetch(`${import.meta.env.VITE_BACKEND}/vocab/${vocabId}`, {
         method: "DELETE",
       });
       const text = await res.text();
@@ -194,11 +196,11 @@ export default function RecordPageMongo2() {
     formData.append("csv", file); // must match the multer field name
 
     try {
-      const res = await fetch("http://localhost:3001/vocab");
+      const res = await fetch(`${import.meta.env.VITE_BACKEND}/vocab`);
       const json = await res.json();
 
       if (json.success) {
-        const allVocabs: VocabItem[] = json.data;
+        const allVocabs: VocabBackend[] = json.data;
         setVocabData(allVocabs);
 
         const uniqueUnits = Array.from(
@@ -222,10 +224,10 @@ export default function RecordPageMongo2() {
   // this function reruns the fetching and gets new data
   const fetchVocab = async () => {
     try {
-      const res = await fetch("http://localhost:3001/vocab");
+      const res = await fetch(`${import.meta.env.VITE_BACKEND}/vocab`);
       const json = await res.json();
       if (json.success) {
-        const allVocabs: VocabItem[] = json.data;
+        const allVocabs: VocabBackend[] = json.data;
         setVocabData(allVocabs);
 
         const uniqueUnits = Array.from(
@@ -295,6 +297,7 @@ export default function RecordPageMongo2() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, filteredVocabs]);
 
   useEffect(() => {
@@ -316,8 +319,16 @@ export default function RecordPageMongo2() {
       alert("No vocab selected!");
       return;
     }
-
-    const filename = currentVocab._id.trim() + ".mp3";
+    let addOns = "";
+    let urlPath = "update-vocab-url";
+    if (speakerAccent === Accent.OT) {
+      addOns = "ot";
+      urlPath = "update-vocab-tmp";
+    } else if (speakerAccent === Accent.QC) {
+      addOns = "qc";
+      urlPath = "update-vocab-qc";
+    }
+    const filename = addOns + currentVocab._id.trim() + ".mp3";
 
     setTimeout(async () => {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -338,7 +349,7 @@ export default function RecordPageMongo2() {
             .from("vocabmp3files")
             .upload(filePath, blob, {
               upsert: true,
-              cacheControl: "0", // prevent old cached version
+              cacheControl: "0",
             });
 
           if (error) throw error;
@@ -350,8 +361,8 @@ export default function RecordPageMongo2() {
 
           if (urlData?.publicUrl) {
             // Force refresh via timestamp query param
-            setAudioURL(`${urlData.publicUrl}?t=${Date.now()}`);
-            await fetch("http://localhost:3001/update-vocab-url", {
+            // setAudioURL(`${urlData.publicUrl}?t=${Date.now()}`);
+            await fetch(`${import.meta.env.VITE_BACKEND}/${urlPath}`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -396,12 +407,12 @@ export default function RecordPageMongo2() {
     }
   };
 
-  const handleEditVocab = (vocab: VocabItem) => {
+  const handleEditVocab = (vocab: VocabBackend) => {
     setEditVocab(vocab);
     setIsEditing(true); // you can use this to show/hide the form
   };
 
-  function recordingPanel(word: VocabItem, index: number) {
+  function recordingPanel(word: VocabBackend, index: number) {
     const isCurrent = currentVocab?._id === word._id;
     return (
       <div className="flex-col" key={word._id}>
@@ -427,26 +438,37 @@ export default function RecordPageMongo2() {
 
             <div className="flex">
               <button
-                onClick={toggleRecording}
-                className={`px-4 py-2 ${
-                  isRecording && isCurrent ? "bg-amber-800" : "bg-sky-900"
-                } text-white rounded text-sm`}
+                onClick={() => {
+                  setCurrentIndex(index);
+                  setShouldRecord(true);
+                }}
+                className={`px-4 py-2 ${isRecording && isCurrent ? "bg-amber-800" : "bg-sky-900"
+                  } text-white rounded text-sm`}
               >
                 {isRecording && isCurrent
                   ? "Stop Recording"
                   : "Start Recording"}
               </button>
-              {/* {word && word.mp3_url && (
-                                                        <div>
-                                                            <audio ref={audioRef} controls src={word.mp3_url} className=" h-6 w-45 mx-2" />
-                                                        </div>
-                                                    )} */}
             </div>
           </div>
           <div className="flex-2/12 gap-1 flex justify-end">
-            {word.mp3_url && (
+            {word.mp3_url && speakerAccent === Accent.FR && (
               <Volume2
                 onClick={() => new Audio(`${word.mp3_url}`).play()}
+                className="w-5 h-5 text-amber-800 hover:text-black cursor-pointer"
+              />
+            )}
+
+            {word.qc_url && speakerAccent === Accent.QC && (
+              <Volume2
+                onClick={() => new Audio(`${word.qc_url}`).play()}
+                className="w-5 h-5 text-amber-800 hover:text-black cursor-pointer"
+              />
+            )}
+
+            {word.tmp_url && speakerAccent === Accent.OT && (
+              <Volume2
+                onClick={() => new Audio(`${word.tmp_url}`).play()}
                 className="w-5 h-5 text-amber-800 hover:text-black cursor-pointer"
               />
             )}
@@ -467,253 +489,255 @@ export default function RecordPageMongo2() {
   }
 
   return (
-    <div className="flex h-[92vh]">
-      <div className="w-[25%] flex flex-col items-center border-r-3 border-black">
-        <div className="w-full flex flex-col h-full overflow-hidden">
-          {/* The box for the new unit, drop down .etc */}
-          <div className="flex flex-col">
-            <div className="">
-              <div
-                className="p-3 border-2 m-2 rounded-2xl py-2 flex items-center cursor-pointer hover:bg-green-800/5"
-                onClick={() => setIsModalOpen(true)}
-              >
-                <p
+    <>
+      <div className="flex h-[92vh]">
+        <div className="w-[25%] min-w-[200px] flex flex-col items-center border-r-3 border-black">
+          <div className="w-full flex flex-col h-full overflow-hidden">
+            {/* The box for the new unit, drop down .etc */}
+            <div className="flex flex-col">
+              <div className="">
+                <div
+                  className="p-3 border-2 m-2 rounded-2xl py-2 flex items-center cursor-pointer hover:bg-green-800/5"
                   onClick={() => setIsModalOpen(true)}
-                  className="h-8 w-8 flex items-center text-xl justify-center bg-sky-900 text-white rounded-3xl hover:bg-sky-700 transition"
                 >
-                  <Plus className="w-5 h-5 text-white" />
-                </p>
-                <p
-                  onClick={() => setIsModalOpen(true)}
-                  className=" ml-2 cursor-pointer px-2 h-7 flex items-center justify-center rounded transition"
-                >
-                  Add a Unit
-                </p>
+                  <p
+                    onClick={() => setIsModalOpen(true)}
+                    className="h-8 w-8 flex items-center text-xl justify-center bg-sky-900 text-white rounded-3xl hover:bg-sky-700 transition"
+                  >
+                    <Plus className="w-5 h-5 text-white" />
+                  </p>
+                  <p
+                    onClick={() => setIsModalOpen(true)}
+                    className=" ml-2 cursor-pointer px-2 h-7 flex items-center justify-center rounded transition"
+                  >
+                    Add a Unit
+                  </p>
+                </div>
               </div>
-            </div>
-            {/* SELECT UNIT SOPHIE */}
-            <div className="p-3 pb-1">Select Class/ Unit</div>
-            <div className="w-full flex flex-col items-center border-t-2">
-              {classes
-                .sort((a, b) => a.localeCompare(b))
-                .map((cls, index) => {
-                  // Compute units for this class
-                  const unitOptionsForClass = Array.from(
-                    new Set(
-                      vocabData
-                        .filter((v) => v.class === cls)
-                        .map((v) => v.unit || "")
+              {/* SELECT UNIT SOPHIE */}
+              <div className="p-3 pb-1">Select Class/ Unit</div>
+              <div className="w-full flex flex-col items-center border-t-2">
+                {classes
+                  .sort((a, b) => a.localeCompare(b))
+                  .map((cls, index) => {
+                    // Compute units for this class
+                    const unitOptionsForClass = Array.from(
+                      new Set(
+                        vocabData
+                          .filter((v) => v.class === cls)
+                          .map((v) => v.unit || "")
+                      )
                     )
-                  )
-                    .filter(Boolean)
-                    .sort((a, b) =>
-                      a.localeCompare(b, undefined, {
-                        numeric: true,
-                        sensitivity: "base",
-                      })
-                    )
-                    .map((unit) => ({ value: unit, label: unit }));
+                      .filter(Boolean)
+                      .sort((a, b) =>
+                        a.localeCompare(b, undefined, {
+                          numeric: true,
+                          sensitivity: "base",
+                        })
+                      )
+                      .map((unit) => ({ value: unit, label: unit }));
 
-                  return (
-                    <div
-                      className={`w-full border-b-2 border-gray-400 cursor-pointer select-none `}
-                      key={index}
-                    >
+                    return (
                       <div
-                        onClick={() => {
-                          toggleClass(cls);
-                          setSelectedClass(cls);
-                          setSelectedUnit(null);
-                        }}
-                        className={`p-2 px-6 flex justify-between bg-sky-900 text-white ${
-                          expandedClasses.includes(cls) ? "border-b-2" : ""
-                        }`}
+                        className={`w-full border-b-2 border-gray-400 cursor-pointer select-none `}
+                        key={index}
                       >
-                        <div>{cls}</div>
-                        {expandedClasses.includes(cls) ? (
-                          <ChevronUp></ChevronUp>
-                        ) : (
-                          <ChevronDown></ChevronDown>
+                        <div
+                          onClick={() => {
+                            toggleClass(cls);
+                            setSelectedClass(cls);
+                            setSelectedUnit(null);
+                          }}
+                          className={`p-2 px-6 flex justify-between bg-sky-900 text-white ${expandedClasses.includes(cls) ? "border-b-2" : ""
+                            }`}
+                        >
+                          <div>{cls}</div>
+                          {expandedClasses.includes(cls) ? (
+                            <ChevronUp></ChevronUp>
+                          ) : (
+                            <ChevronDown></ChevronDown>
+                          )}
+                        </div>
+
+                        {expandedClasses.includes(cls) && (
+                          <div>
+                            {unitOptionsForClass.map(({ value }) => (
+                              <div
+                                key={value}
+                                onClick={() => {
+                                  if (selectedUnit && selectedUnit === value) {
+                                    setSelectedUnit(null)
+                                  } else {
+                                    setSelectedUnit(value);
+                                  }
+                                  setSelectedClass(cls);
+                                }}
+                                className={`p-2 px-6 w-full  cursor-pointer flex justify-between select-none
+                                                                ${selectedUnit ===
+                                    value
+                                    ? "bg-sky-200"
+                                    : ""
+                                  }`}
+                              >
+                                <div className="">{value}</div>
+                              </div>
+                            ))}
+                          </div>
                         )}
                       </div>
-
-                      {expandedClasses.includes(cls) && (
-                        <div>
-                          {unitOptionsForClass.map(({ value }) => (
-                            <div
-                              key={value}
-                              onClick={() => {
-                                selectedUnit && selectedUnit === value
-                                  ? setSelectedUnit(null)
-                                  : setSelectedUnit(value);
-                                setSelectedClass(cls);
-                              }}
-                              className={`p-2 px-6 w-full  cursor-pointer flex justify-between select-none
-                                                                ${
-                                                                  selectedUnit ===
-                                                                  value
-                                                                    ? "bg-sky-200"
-                                                                    : ""
-                                                                }`}
-                            >
-                              <div className="">{value}</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="w-full flex flex-col overflow-hidden">
-        {selectedUnit && selectedClass ? (
-          <>
-            {/* Header with class + unit + delete button */}
-            <div className="flex justify-end p-2 mb-0 border-b-3">
-              <div className="flex md:flex-row flex-col w-full h-full justify-between items-center mx-5">
-                <h2 className="text-xl font-bold">
-                  {selectedClass} | {selectedUnit}
-                </h2>
-                <p className="text-sm text-gray-700 py-2">
-                  Recording progress:{" "}
-                  {filteredVocabs.filter((v) => v.mp3_url).length} /{" "}
-                  {filteredVocabs.length}(
-                  {(
-                    (filteredVocabs.filter((v) => v.mp3_url).length /
-                      filteredVocabs.length) *
-                    100
-                  ).toFixed(0)}
-                  %)
-                </p>
-                <button
-                  onClick={handleDeleteUnit}
-                  disabled={!selectedUnit}
-                  className={`px-4 py-1 bg-sky-900 text-white hover:bg-sky-800 rounded-xl
+        <div className="w-full flex flex-col overflow-hidden">
+          {selectedUnit && selectedClass ? (
+            <>
+              {/* Header with class + unit + delete button */}
+              <div className="flex justify-end p-2 mb-0 border-b-3">
+                <div className="flex md:flex-row flex-col w-full h-full justify-between items-center mx-5">
+                  <h2 className="text-xl font-bold">
+                    {selectedClass} | {selectedUnit}
+                  </h2>
+                  <p className="text-sm text-gray-700 py-2">
+                    Recording progress:{" "}
+                    {filteredVocabs.filter((v) => v.mp3_url).length} /{" "}
+                    {filteredVocabs.length}(
+                    {(
+                      (filteredVocabs.filter((v) => v.mp3_url).length /
+                        filteredVocabs.length) *
+                      100
+                    ).toFixed(0)}
+                    %)
+                  </p>
+                  <button
+                    onClick={handleDeleteUnit}
+                    disabled={!selectedUnit}
+                    className={`px-4 py-1 bg-sky-900 text-white hover:bg-sky-800 rounded-xl
                             ${selectedUnit ? "" : "hidden"}
                         `}
-                >
-                  Delete unit
-                </button>
-              </div>
-            </div>
-            {/* EDIT EACH VOCAB */}
-            {IsEditing && (
-              <div>
-                <div className="absolute p-4 border rounded bg-white shadow max-w-md w-full">
-                  <h2 className="text-xl font-bold mb-4">Edit Vocabulary</h2>
-                  <form onSubmit={handleUpdateVocab}>
-                    <div className="mb-3">
-                      <label className="block font-semibold mb-1">French</label>
-                      <input
-                        type="text"
-                        className="w-full border px-2 py-1 rounded"
-                        value={editVocab.french}
-                        onChange={(e) =>
-                          setEditVocab((prev) => ({
-                            ...prev,
-                            french: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-
-                    <div className="mb-3">
-                      <label className="block font-semibold mb-1">
-                        English
-                      </label>
-                      <input
-                        type="text"
-                        className="w-full border px-2 py-1 rounded"
-                        value={editVocab.english}
-                        onChange={(e) =>
-                          setEditVocab((prev) => ({
-                            ...prev,
-                            english: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-
-                    <div className="mb-3">
-                      <label className="block font-semibold mb-1">Unit</label>
-                      <input
-                        type="text"
-                        className="w-full border px-2 py-1 rounded"
-                        value={editVocab.unit}
-                        onChange={(e) =>
-                          setEditVocab((prev) => ({
-                            ...prev,
-                            unit: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-
-                    <div className="mb-4">
-                      <label className="block font-semibold mb-1">Class</label>
-                      <input
-                        type="text"
-                        className="w-full border px-2 py-1 rounded"
-                        value={editVocab.class}
-                        onChange={(e) =>
-                          setEditVocab((prev) => ({
-                            ...prev,
-                            class: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-
-                    <div className="flex gap-2 justify-end">
-                      <button
-                        type="submit"
-                        className="bg-sky-700 text-white px-4 py-2 rounded hover:bg-sky-800"
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        className="bg-gray-300 text-black px-4 py-2 rounded hover:bg-gray-400"
-                        onClick={cancelEdit}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
+                  >
+                    Delete unit
+                  </button>
                 </div>
               </div>
-            )}
-            <div className="mx-5 my-5 max-w-[1000px] overflow-y-scroll justify-center outline-none">
-              <h2>Press Space to record, left right to switch words</h2>
-              <div className="rounded-2xl border-gray-400 border-2 overflow-y-scroll justify-center outline-none">
-                {filteredVocabs.map((word, index) => {
-                  return recordingPanel(word, index);
-                })}
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="flex flex-col w-full h-full bg-opacity-5 items-center justify-center bg-[rgba(120,53,15,0.05)]">
-            <div>Please select a unit or add a unit</div>
-          </div>
-        )}
-      </div>
+              {/* EDIT EACH VOCAB */}
+              {IsEditing && (
+                <div>
+                  <div className="absolute p-4 border rounded bg-white shadow max-w-md w-full">
+                    <h2 className="text-xl font-bold mb-4">Edit Vocabulary</h2>
+                    <form onSubmit={handleUpdateVocab}>
+                      <div className="mb-3">
+                        <label className="block font-semibold mb-1">French</label>
+                        <input
+                          type="text"
+                          className="w-full border px-2 py-1 rounded"
+                          value={editVocab.french}
+                          onChange={(e) =>
+                            setEditVocab((prev) => ({
+                              ...prev,
+                              french: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
 
-      <Uploadcsv
-        isOpen={IsModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSubmit={(unit, className, file) => {
-          handleUploadDone(unit, className, file); // sends file to backend
-          fetchVocab();
-          setSelectedClass(className);
-          setSelectedUnit(unit);
-        }}
-        defaultclass={selectedClass ?? ""}
-      />
-    </div>
+                      <div className="mb-3">
+                        <label className="block font-semibold mb-1">
+                          English
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full border px-2 py-1 rounded"
+                          value={editVocab.english}
+                          onChange={(e) =>
+                            setEditVocab((prev) => ({
+                              ...prev,
+                              english: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+
+                      <div className="mb-3">
+                        <label className="block font-semibold mb-1">Unit</label>
+                        <input
+                          type="text"
+                          className="w-full border px-2 py-1 rounded"
+                          value={editVocab.unit}
+                          onChange={(e) =>
+                            setEditVocab((prev) => ({
+                              ...prev,
+                              unit: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+
+                      <div className="mb-4">
+                        <label className="block font-semibold mb-1">Class</label>
+                        <input
+                          type="text"
+                          className="w-full border px-2 py-1 rounded"
+                          value={editVocab.class}
+                          onChange={(e) =>
+                            setEditVocab((prev) => ({
+                              ...prev,
+                              class: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          type="submit"
+                          className="bg-sky-700 text-white px-4 py-2 rounded hover:bg-sky-800"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          className="bg-gray-300 text-black px-4 py-2 rounded hover:bg-gray-400"
+                          onClick={cancelEdit}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+              <div className="mx-5 my-5 max-w-[1000px] overflow-y-scroll justify-center outline-none">
+                <h2>Press Space to record, left right to switch words</h2>
+                <div className="rounded-2xl border-gray-400 border-2 overflow-y-scroll justify-center outline-none">
+                  {filteredVocabs.map((word, index) => {
+                    return recordingPanel(word, index);
+                  })}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col w-full h-full bg-opacity-5 items-center justify-center bg-[rgba(120,53,15,0.05)]">
+              <div>Please select a unit or add a unit</div>
+            </div>
+          )}
+        </div>
+
+        <Uploadcsv
+          isOpen={IsModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onSubmit={(unit, className, file) => {
+            handleUploadDone(unit, className, file); // sends file to backend
+            fetchVocab();
+            setSelectedClass(className);
+            setSelectedUnit(unit);
+          }}
+          defaultclass={selectedClass ?? ""}
+        />
+      </div >
+    </>
   );
 }

@@ -25,7 +25,7 @@ export const fetchVocabData = createAsyncThunk<
   async ({ className, unitName }, { rejectWithValue }) => {
     try {
       const res = await fetch(
-        `http://localhost:3001/vocab-by-class-unit?class=${encodeURIComponent(className)}&unit=${encodeURIComponent(unitName)}`
+        `${import.meta.env.VITE_BACKEND}/vocab-by-class-unit?class=${encodeURIComponent(className)}&unit=${encodeURIComponent(unitName)}`
       );
       const json = await res.json();
 
@@ -33,6 +33,7 @@ export const fetchVocabData = createAsyncThunk<
         return rejectWithValue(json.message || 'Failed to fetch vocab');
       }
       return json.data as VocabBackend[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       return rejectWithValue(err.message || 'Network error');
     }

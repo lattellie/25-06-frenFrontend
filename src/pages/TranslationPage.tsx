@@ -1,14 +1,11 @@
-import { Box, Button, Typography, useTheme } from "@mui/material";
+import { Box, Typography, useTheme } from "@mui/material";
 import {
-  useShowEnglishContext,
   useSpeedContext,
   useUseAccentContext,
   useUseAudioContext,
-  useVocabUnitContext,
 } from "../contexts/VocabContext";
 import type { VocabBackend } from "../type/vocabDD";
-import { FaCirclePlay } from "react-icons/fa6";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MdCheckBox, MdCheckBoxOutlineBlank } from "react-icons/md";
 import { useSelector } from "react-redux";
@@ -106,14 +103,23 @@ function playMp3(url: string): Promise<void> {
     audio.play();
   });
 }
+
+const stubVocabBackend: VocabBackend = {
+  _id: '0',
+  french: '0',
+  english: '0',
+  unit: '0',
+  class: '0',
+  mp3_url: ''
+} as VocabBackend
+
 export default function TranslationPage() {
   const theme = useTheme();
   const { useAudio, setUseAudio } = useUseAudioContext();
   const { useAccent, setUseAccent } = useUseAccentContext();
   const { speed, setSpeed } = useSpeedContext();
-  const [falling, setFalling] = useState(true); // is word falling?
-  const [startTime, setStartTime] = useState<number | null>(null); // animation start time
-  const [duration, setDuration] = useState<number>(1000); // e.g. 5 seconds to reach bottom
+  const [falling, setFalling] = useState(true);
+  const [duration, setDuration] = useState<number>(1000);
   const vocabs: VocabBackend[] = useSelector(
     (state: RootState) => state.vocab.filteredData
   );
@@ -126,21 +132,14 @@ export default function TranslationPage() {
     shuffleArray(vocabs)
   );
   const [currentIndex, setCurrentIndex] = useState<number>(0);
-  const [nowSubmit, setNowSubmit] = useState<boolean>(true);
+  const [nowSubmit, setNowSubmit] = useState<boolean>(true); // if it's displaying answer or submitting
   const [typing, setTyping] = useState<string>("");
   const [frozenTransform, setFrozenTransform] = useState<string | null>(null);
-  const [target, setTarget] = useState<string>("");
+  const [target, setTarget] = useState<VocabBackend>(stubVocabBackend);
   const [targetNoSpace, setTargetNoSpace] = useState<string>("");
-
-  useEffect(() => {
-    if (!firstLoad && currVocabs.length > 0) {
-      setStartTime(Date.now());
-      playAudio(currVocabs[currentIndex]);
-      setNowSubmit(true);
-      setTarget(currVocabs[currentIndex].french);
-      setTargetNoSpace(target.replace(/\s/g, ""));
-    }
-  }, [currentIndex]);
+  const [wordFlag, setWordFlag] = useState<boolean>(true)
+  const [finishPracticing, setFinishPracticing] = useState<boolean>(false);
+  const isSubmittingRef = useRef(false);
 
   useEffect(() => {
     setDuration(speed * 1000);
@@ -149,104 +148,30 @@ export default function TranslationPage() {
   useEffect(() => {
     setFalling(false);
     setFrozenTransform(null);
-    const timeout = setTimeout(() => {
-      setFalling(true);
-    }, 50);
-    return () => {
-      clearTimeout(timeout);
-    };
-  }, [currVocabs, currentIndex]);
+  }, [wordFlag]);
 
   useEffect(() => {
-    if (!nowSubmit || currVocabs.length === 0) return;
-    const timer = setTimeout(() => {
-      handleSubmit({ preventDefault: () => {} });
-    }, duration);
-    return () => clearTimeout(timer);
-  }, [currentIndex, duration, nowSubmit, currVocabs]);
-
-  const handleSubmit = async (e: { preventDefault: () => void }) => {
-    console.log("handleSubmit");
-    if (currVocabs.length === 0) {
-      e.preventDefault();
-      return;
-    } else if (firstLoad) {
-      setFirstLoad(false);
-      setFalling(false);
-      setTimeout(() => {
+    if (falling === false) {
+      const timeout = setTimeout(() => {
         setFalling(true);
       }, 50);
-      setStartTime(Date.now());
-      playAudio(currVocabs[currentIndex]);
-      setNowSubmit(true);
-      return;
+      return () => clearTimeout(timeout);
     }
-    const fallingDiv = document.getElementById("falling-word");
-    if (fallingDiv) {
-      // Get computed style transform matrix
-      const style = window.getComputedStyle(fallingDiv);
-      const matrix: string = style.transform;
-      if (matrix && matrix !== "none") {
-        const match = matrix.match(/matrix.*\((.+)\)/);
-        if (match && match[1]) {
-          const values = match[1].split(", ");
-          const translateX = parseFloat(values[4]);
-          const translateY = parseFloat(values[5]);
-          setFrozenTransform(`translate(${translateX}px, ${translateY}px)`);
-        } else {
-          setFrozenTransform(null); // fallback if parsing fails
-        }
-      } else {
-        setFrozenTransform(null);
-      }
-    }
-    setFalling(false);
+  }, [falling]);
 
-    if (nowSubmit) {
-      e.preventDefault();
-      const userAnswer = typing.trim().toLowerCase();
-      if (
-        userAnswer ===
-          currVocabs[currentIndex].french.replace(/\s/g, "").toLowerCase() ||
-        (!useAccent &&
-          noAccentEqual(
-            userAnswer,
-            currVocabs[currentIndex].french.replace(/\s/g, "").toLowerCase()
-          ))
-      ) {
-        await playMp3("/correct1.mp3");
-        const updated = currVocabs.filter((_, i) => i !== currentIndex);
-        setCurrVocabs(updated);
-        setTyping("");
-        if (updated.length > 0) {
-          setCurrentIndex(currentIndex % updated.length);
-          playAudio(updated[currentIndex]);
-        }
-      } else {
-        await playMp3("/wrong.mp3");
-        setTyping(currVocabs[currentIndex].french.replace(/\s/g, ""));
-        playAudio(currVocabs[currentIndex]);
-        setNowSubmit(false);
-      }
-    } else {
-      e.preventDefault();
-      const removed = currVocabs[currentIndex];
-      const updated = currVocabs.filter((_, i) => i !== currentIndex);
-      const randomIndex = Math.floor(Math.random() * (updated.length + 1));
-      const newVocabs = [
-        ...updated.slice(0, randomIndex),
-        removed,
-        ...updated.slice(randomIndex),
-      ];
-      setCurrVocabs(newVocabs);
-      setTyping("");
-      setNowSubmit(true);
-      if (updated.length > 0) {
-        setCurrentIndex(currentIndex % updated.length);
-        playAudio(updated[currentIndex]);
-      }
-    }
-  };
+
+  useEffect(() => {
+    if (!nowSubmit || finishPracticing) return;
+    const timer = setTimeout(() => {
+      handleWordSubmit({ preventDefault: () => { } });
+    }, duration);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duration, finishPracticing, nowSubmit]);
+
+  useEffect(() => {
+    setTargetNoSpace(target.french.replace(/\s/g, ""));
+  }, [target]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "Backspace") {
@@ -263,14 +188,13 @@ export default function TranslationPage() {
     ) {
       setTyping(typing.concat(e.key));
     } else if (e.key === "Enter") {
-      // e.preventDefault();
-      handleSubmit(e);
+      handleSubmitOrContinue(e);
     }
   };
 
   function textBox() {
     let temp = 0;
-    const showString = target
+    const showString = target.french
       .split("")
       .map((char, i) => {
         if (char === " ") {
@@ -284,7 +208,6 @@ export default function TranslationPage() {
     return (
       <Box
         tabIndex={0}
-        onKeyDown={(e) => handleKeyDown(e)}
         sx={{
           backgroundColor: nowSubmit
             ? theme.palette.white.main
@@ -329,14 +252,14 @@ export default function TranslationPage() {
     );
   }
 
-  function playAudio(vocab: VocabBackend) {
+  async function playAudio(vocab: VocabBackend) {
     if (!useAudio) {
       return;
     }
     const french: string = vocab.french;
     if (vocab.mp3_url != "") {
       const audio = new Audio(vocab.mp3_url);
-      audio.play();
+      await audio.play();
     } else {
       if (!french || voices.length === 0) {
         console.warn("Voices not loaded yet");
@@ -354,14 +277,130 @@ export default function TranslationPage() {
     }
   }
 
+  const handleSubmitOrContinue = async (e: { preventDefault: () => void }) => {
+    if (nowSubmit) {
+      await handleWordSubmit(e)
+    } else {
+      await updateAndGetNewWords()
+    }
+  }
+
+  const handleWordSubmit = async (e: { preventDefault: () => void }) => {
+    if (isSubmittingRef.current) {
+      console.log("unable to submit")
+      return
+    }
+    console.log("able to submit")
+    isSubmittingRef.current = true;
+    e.preventDefault();
+    console.log("typing:", typing);
+    const userAnswer = typing.trim().toLowerCase();
+    if (
+      (userAnswer === target.french.replace(/\s/g, "").toLowerCase())
+      || (!useAccent && noAccentEqual(
+        userAnswer,
+        target.french.replace(/\s/g, "").toLowerCase()
+      ))
+    ) {
+      await playMp3("/correct1.mp3");
+      const updated = currVocabs.filter((_, i) => i !== currentIndex);
+      setCurrVocabs(updated);
+    } else {
+      await playMp3("/wrong.mp3");
+    }
+    setTyping(target.french.replace(/\s/g, ""));
+    setNowSubmit(false);
+
+    const fallingDiv = document.getElementById("falling-word");
+    if (fallingDiv) {
+      const style = window.getComputedStyle(fallingDiv);
+      const matrix: string = style.transform;
+      if (matrix && matrix !== "none") {
+        const match = matrix.match(/matrix.*\((.+)\)/);
+        console.log("match: ", match);
+        if (match && match[1]) {
+          const values = match[1].split(", ");
+          const translateX = parseFloat(values[4]);
+          const translateY = parseFloat(values[5]);
+          setFrozenTransform(`translate(${translateX}px, ${translateY}px)`);
+        } else {
+          setFrozenTransform(null);
+        }
+      } else {
+        setFrozenTransform(null);
+      }
+    }
+    setFalling(false);
+    isSubmittingRef.current = false;
+  }
+  const gameInterface = () => {
+    return (
+      <>
+        {!finishPracticing ? (<>
+          <div className="relative  flex-3/4 w-full overflow-hidden">
+            <div
+              id="falling-word"
+              className="absolute h-full top-0 left-1/2 transform -translate-x-1/2 text-2xl font-bold ease-linear"
+              style={{
+                transitionProperty: frozenTransform ? "none" : "transform",
+                transitionDuration: frozenTransform
+                  ? "0ms"
+                  : falling
+                    ? `${duration}ms`
+                    : "0ms",
+                transform: frozenTransform
+                  ? frozenTransform
+                  : falling
+                    ? "translateX(-50%) translateY(90%)"
+                    : "translateX(-50%) translateY(0)",
+              }}
+            >
+              {target.english}
+            </div>
+          </div>
+          <form onSubmit={
+            (e) => {
+              handleSubmitOrContinue(e)
+            }
+          } className="flex flex-col gap-4">
+            {textBox()}
+            <button
+              type="submit"
+              className="bg-sky-900 text-white px-4 py-2 rounded hover:bg-sky-950"
+            >
+              {nowSubmit ? "Submit" : "Continue"}
+            </button>
+          </form>
+        </>) : (
+          <h2 className="text-xl">Finish Practicing</h2>
+        )}
+      </>
+    )
+  }
+  function updateIndex(randomIndex: number) {
+    setCurrentIndex(randomIndex);
+    setWordFlag(!wordFlag);
+  }
+  async function updateAndGetNewWords() {
+    setTyping('');
+    if (currVocabs.length > 0) {
+      const randomIndex = Math.floor(Math.random() * currVocabs.length);
+      updateIndex(randomIndex);
+      setTarget(currVocabs[randomIndex]);
+      await playAudio(currVocabs[randomIndex]);
+      setNowSubmit(true)
+    } else {
+      setFinishPracticing(true)
+    }
+  }
+
   if (firstLoad) {
     return (
       <div className="flex h-[92vh]">
         <div className="w-full flex flex-col bg-cyan-50">
           <div className="p-2 pl-4 pt-0 min-h-fit h-[7vh] border-b-[3px] border-cyan-200 flex items-center justify-between">
-            <p>{`Current Progress: ${vocabs.length - currVocabs.length}/${
-              vocabs.length
-            }`}</p>
+            <p>{`Current Progress: ${vocabs.length - currVocabs.length}/${vocabs.length
+              }`}</p>
             <h2
               className="text-sky-900 text-2xl cursor-pointer"
               onClick={() => navigate("/")}
@@ -370,10 +409,7 @@ export default function TranslationPage() {
             </h2>
           </div>
 
-          <form
-            onSubmit={(e) => {
-              handleSubmit(e);
-            }}
+          <div
             className="p-2 bg-white border-b-[3px] border-black flex-1 pl-4 flex flex-col gap-2 overflow-x-scroll h-full justify-center items-center"
           >
             <div
@@ -411,9 +447,9 @@ export default function TranslationPage() {
                 type="range"
                 id="speed"
                 name="speed"
-                min="1"
-                max="10"
-                step="1"
+                min="6"
+                max="20"
+                step="2"
                 value={speed}
                 onChange={(e) => setSpeed(Number(e.target.value))}
                 className="w-full accent-sky-900"
@@ -421,12 +457,15 @@ export default function TranslationPage() {
             </div>
 
             <button
-              type="submit"
+              onClick={async () => {
+                setFirstLoad(false)
+                await updateAndGetNewWords()
+              }}
               className="bg-sky-900 text-white px-6 py-2 rounded-xl hover:bg-sky-950 cursor-pointer"
             >
               <h4 className="text-xl">Start</h4>
             </button>
-          </form>
+          </div>
 
           <div className="flex p-4 justify-between pr-8">
             <button
@@ -449,9 +488,8 @@ export default function TranslationPage() {
       <div className="w-full flex flex-col bg-cyan-50">
         <div className="p-2 pl-4 pt-0 min-h-fit border-b-[3px] border-cyan-50 h-[7vh] flex flex-row items-center justify-between">
           <p className="text-base">
-            {`Current Progress: ${vocabs.length - currVocabs.length}/${
-              vocabs.length
-            }`}
+            {`Current Progress: ${vocabs.length - currVocabs.length}/${vocabs.length
+              }`}
           </p>
           <h1
             className="text-2xl text-sky-900 cursor-pointer"
@@ -462,61 +500,22 @@ export default function TranslationPage() {
         </div>
 
         <div className="p-2 pl-4 flex-1 flex flex-col gap-2 overflow-x-scroll h-full justify-center items-center bg-white border-b-[3px] border-black">
-          {currVocabs.length > 0 ? (
-            <>
-              <div className="relative bg-amber-100 flex-3/4 w-full overflow-hidden">
-                <div
-                  id="falling-word"
-                  className="absolute h-full top-0 bg-amber-400 left-1/2 transform -translate-x-1/2 text-2xl font-bold ease-linear"
-                  style={{
-                    transitionProperty: frozenTransform ? "none" : "transform",
-                    transitionDuration: frozenTransform
-                      ? "0ms"
-                      : falling
-                      ? `${duration}ms`
-                      : "0ms",
-                    transform: frozenTransform
-                      ? frozenTransform
-                      : falling
-                      ? "translateX(-50%) translateY(90%)"
-                      : "translateX(-50%) translateY(0)",
-                  }}
-                >
-                  {currVocabs[currentIndex].english}
-                </div>
-              </div>
-              <form
-                onSubmit={handleSubmit}
-                className="flex-1/4 bg-amber-200 flex flex-col gap-4"
-              >
-                {textBox()}
-                <button
-                  type="submit"
-                  className="bg-sky-900 text-white px-4 py-2 rounded hover:bg-sky-950"
-                >
-                  {nowSubmit ? "Submit" : "Continue"}
-                </button>
-              </form>
-            </>
-          ) : (
-            <h2 className="text-xl">Finish Practicing</h2>
-          )}
+          {gameInterface()}
         </div>
 
         <div className="flex p-4 justify-between pr-8">
           <button
-            className="bg-sky-900 text-white rounded-full py-2 px-4 hover:bg-sky-950 px-4 py-2"
+            className="bg-sky-900 text-white rounded-full hover:bg-sky-950 px-4 py-2"
             onClick={() => navigate("/")}
           >
             Back to Home
           </button>
 
           <button
-            className={`${
-              currVocabs.length !== 0
-                ? "bg-cyan-50"
-                : "bg-sky-900 hover:bg-sky-950"
-            } text-white rounded-full w-[10vw] px-4 py-2`}
+            className={`${currVocabs.length !== 0
+              ? "bg-cyan-50"
+              : "bg-sky-900 hover:bg-sky-950"
+              } text-white rounded-full w-[10vw] px-4 py-2`}
             onClick={() => navigate("/viewVocab")}
           >
             Next

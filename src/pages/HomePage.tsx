@@ -1,18 +1,15 @@
 // src/pages/HomePage.tsx
-import { Box, Button, Typography, useTheme } from "@mui/material";
+import { Box } from "@mui/material";
 import { FiChevronUp, FiChevronDown } from "react-icons/fi";
 
 import { useEffect, useState } from "react";
-import { getData, getTitles } from "../utils/getData";
 import {
+  Accent,
   type Vocab,
-  type VocabUnit,
-  type VocabEntry,
   type VocabBackend,
 } from "../type/vocabDD";
 import { MdCheckBoxOutlineBlank, MdCheckBox } from "react-icons/md";
 import { FaCirclePlay } from "react-icons/fa6";
-import { useVocabContext, useVocabUnitContext } from "../contexts/VocabContext";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch, RootState } from "../store/store";
@@ -92,7 +89,7 @@ export default function HomePage() {
 
   useEffect(() => {
     const getData = async () => {
-      const res = await fetch("http://localhost:3001/vocab");
+      const res = await fetch(`${import.meta.env.VITE_BACKEND}/vocab`);
       const json = await res.json();
       const frenData = json.data as VocabBackend[];
       setFrenVocabs(frenData);
@@ -102,6 +99,7 @@ export default function HomePage() {
     if (frenVocab.length === 0) {
       getData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const toggleClass = (className: string) => {
@@ -133,9 +131,8 @@ export default function HomePage() {
             setSelectedClass(className);
             setSelectedUnit(null);
           }}
-          className={`p-2 px-6 flex justify-between items-center bg-sky-900 text-white ${
-            isExpanded ? "border-b-2" : ""
-          }`}
+          className={`p-2 px-6 flex justify-between items-center bg-sky-900 text-white ${isExpanded ? "border-b-2" : ""
+            }`}
         >
           <Box>{className}</Box>
           <Box>{isExpanded ? <FiChevronUp /> : <FiChevronDown />}</Box>
@@ -147,14 +144,15 @@ export default function HomePage() {
               <Box
                 key={unit}
                 onClick={() => {
-                  selectedUnit === unit
-                    ? setSelectedUnit(null)
-                    : setSelectedUnit(unit);
+                  if (selectedUnit === unit) {
+                    setSelectedUnit(null)
+                  } else {
+                    setSelectedUnit(unit);
+                  }
                   setSelectedClass(className);
                 }}
-                className={`p-2 px-6 w-full cursor-pointer flex justify-start select-none ${
-                  selectedUnit === unit ? "bg-sky-200" : ""
-                }`}
+                className={`p-2 px-6 w-full cursor-pointer flex justify-start select-none ${selectedUnit === unit ? "bg-sky-200" : ""
+                  }`}
               >
                 <div>{unit}</div>
               </Box>
@@ -179,12 +177,9 @@ export default function HomePage() {
     dispatch(updateFilteredData(selectedList));
     navigate("/translation");
   };
-  function playAudio(vocab: VocabBackend) {
+  function playAudio(vocab: VocabBackend, accent: Accent = Accent.IA) {
     const french: string = vocab.french;
-    if (vocab.mp3_url != "") {
-      const audio = new Audio(vocab.mp3_url);
-      audio.play();
-    } else {
+    if (accent === Accent.IA) {
       if (!french || voices.length === 0) {
         console.warn("Voices not loaded yet");
         return;
@@ -198,18 +193,39 @@ export default function HomePage() {
 
       window.speechSynthesis.cancel(); // <-- Optional: cancel any ongoing speech
       window.speechSynthesis.speak(msg);
-    }
+
+    } else if (accent === Accent.FR && vocab.mp3_url != "") {
+      const audio = new Audio(vocab.mp3_url);
+      audio.play();
+    } else if (accent === Accent.QC && vocab.qc_url != "") {
+      const audio = new Audio(vocab.qc_url);
+      audio.play();
+    } else if (accent === Accent.OT && vocab.tmp_url != "") {
+      const audio = new Audio(vocab.tmp_url);
+      audio.play();
+    } 
   }
 
+  function getUnitCards(unit: string, cls: string) {
+    return (
+      <li key={unit}
+        onClick={() => {
+          setSelectedClass(cls);
+          setSelectedUnit(unit);
+        }}
+        className="p-10 bg-white shadow-lg m-2 mb-4  rounded-2xl cursor-pointer hover:bg-sky-200 hover:translate-1 ">
+        <h1 className="text-2xl">{unit}</h1>
+      </li>
+    )
+  }
   function vocabItem(vocab: Vocab, index: number) {
     const voc = vocab.vocab;
     const selected = vocab.selected;
     const isEven = index % 2 === 0;
     return (
       <div
-        className={`flex border-b-[3px] ${
-          isEven ? "bg-sky-100" : "bg-white"
-        } border-gray-300 pl-4 py-1 items-center`}
+        className={`flex border-b-[3px] ${isEven ? "bg-sky-100" : "bg-white"
+          } border-gray-300 pl-4 py-1 items-center`}
       >
         {/* Select checkbox button */}
         <button
@@ -227,13 +243,37 @@ export default function HomePage() {
 
         {/* Play audio button */}
         <button
-          onClick={() => playAudio(voc)}
-          className={`text-xl cursor-pointer mr-4  ${
-            voc.mp3_url === "" ? "text-cyan-500" : "text-cyan-800"
-          } p-0 m-0`}
+          onClick={() => playAudio(voc, Accent.IA)}
+          className={`text-xl cursor-pointer mr-4  text-cyan-500
+            } p-0 m-0`}
         >
           <FaCirclePlay />
         </button>
+        <button
+          onClick={() => playAudio(voc, Accent.FR)}
+          className={`text-xl mr-4  ${voc.mp3_url === "" ? "text-gray-200 !cursor-default" : "text-cyan-800 cursor-pointer"
+            } p-0 m-0`}
+          disabled={voc.mp3_url === ""}
+        >
+          <FaCirclePlay />
+        </button>
+        <button
+          onClick={() => playAudio(voc, Accent.QC)}
+          className={`text-xl cursor-pointer mr-4  ${voc.qc_url === "" ? "text-gray-200 !cursor-default" : "text-cyan-500 cursor-pointer"
+            } p-0 m-0`}
+          disabled={voc.qc_url === ""}
+        >
+          <FaCirclePlay />
+        </button>
+        <button
+          onClick={() => playAudio(voc, Accent.OT)}
+          className={`text-xl cursor-pointer mr-4  ${voc.tmp_url === "" ? "text-gray-200 !cursor-default" : "text-cyan-800 cursor-pointer"
+            } p-0 m-0`}
+          disabled={voc.tmp_url === ""}
+        >
+          <FaCirclePlay />
+        </button>
+
 
         {/* French word */}
         <div className="flex items-center w-[40%] min-w-[200px]">
@@ -253,7 +293,7 @@ export default function HomePage() {
     return <div>loading data...</div>;
   }
   return (
-    <div className="flex h-[92vh]">
+    <div className="flex h-[92vh] max-w-full">
       {/* Left Sidebar */}
       <div className="w-[20%] min-w-[200px] border-r-[3px] border-black overflow-y-scroll p-3 ml-1 space-y-2">
         {unitClassData.map((unitClassList) =>
@@ -262,7 +302,7 @@ export default function HomePage() {
       </div>
 
       {/* Right Main Content */}
-      <div className="w-[80%] flex flex-col bg-cyan-50">
+      <div className="flex flex-col flex-1 bg-cyan-50 overflow-auto">
         {selectedClass && selectedUnit && vocabData ? (
           <div className="w-full h-full flex flex-col justify-center p-2">
             <div className="min-w-fit h-fit flex flex-col mr-2 border-[3px] border-sky-200 bg-white rounded-2xl p-4">
@@ -290,17 +330,51 @@ export default function HomePage() {
                     : "Select All"}
                 </button>
               </div>
+              <div
+                className={`flex border-b-[3px] bg-white border-gray-300 pl-4 py-1 items-center`}
+              >
+                <div
+                  className="mr-4 text-sky-900 text-xl opacity-0"
+                >
+                  <MdCheckBoxOutlineBlank />
+                </div>
+
+                <div
+                  title="Intelligence Artificielle (AI)"
+                  className="mr-4 text-sky-900 cursor-help text-xl"
+                >
+                  IA
+                </div>
+                <div
+                  title="Français (France)"
+                  className="mr-4 text-sky-900 cursor-help text-xl"
+                >
+                  FR
+                </div>
+                <div
+                  title="Québécois (Canada)"
+                  className="mr-4 text-sky-900 cursor-help text-xl"
+                >
+                  QC
+                </div>
+                <div
+                  title="Another Accent"
+                  className="mr-4 text-sky-900 cursor-help text-xl"
+                >
+                  ??
+                </div>
+              </div>
+
               <div className="scrollbar overflow-y-scroll h-[60vh] max-h-fit min-w-fit scrollbar">
                 {vocabList.map((v, i) => vocabItem(v, i))}
               </div>
               <div className="flex flex-row gap-2 justify-end py-2">
                 <button
                   className={`text-lg w-[150px] min-w-fit px-3 py-1 rounded-xl
-                        ${
-                          vocabList.some((v) => v.selected)
-                            ? "bg-[#0c4a6e] hover:bg-[#082f49] text-white cursor-pointer"
-                            : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                        }`}
+                        ${vocabList.some((v) => v.selected)
+                      ? "bg-[#0c4a6e] hover:bg-[#082f49] text-white cursor-pointer"
+                      : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    }`}
                   onClick={handleTranslation}
                   disabled={!vocabList.some((v) => v.selected)}
                 >
@@ -309,11 +383,10 @@ export default function HomePage() {
 
                 <button
                   className={`text-lg w-[150px] min-w-fit px-3 py-1 rounded-xl
-                        ${
-                          vocabList.some((v) => v.selected)
-                            ? "bg-[#0c4a6e] hover:bg-[#082f49] text-white cursor-pointer"
-                            : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                        }`}
+                        ${vocabList.some((v) => v.selected)
+                      ? "bg-[#0c4a6e] hover:bg-[#082f49] text-white cursor-pointer"
+                      : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    }`}
                   onClick={handleNext}
                   disabled={!vocabList.some((v) => v.selected)}
                 >
@@ -323,10 +396,18 @@ export default function HomePage() {
             </div>
           </div>
         ) : (
-          <div className="w-full h-full flex flex-col justify-center text-center">
-            <h5 className="text-2xl">
-              Select a class from left bar to Continue
-            </h5>
+          <div className=" p-4 w-full h-full flex flex-col justify-center text-center">
+            {unitClassData.map((cls) => {
+              return (
+                <div className="flex flex-col gap-3 overflow-y-scroll mt-4 bg-sky-900 rounded-2xl">
+                  <h1 className="text-xl text-left ml-4 mt-4 text-white">{cls.class}</h1>
+                  <ul key={cls.class}
+                    className=" flex flex-row overflow-scroll">
+                    {cls.units.map((u) => { return getUnitCards(u, cls.class) })}
+                  </ul>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>

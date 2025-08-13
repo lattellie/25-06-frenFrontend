@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import type { PayloadAction } from '@reduxjs/toolkit';
 
@@ -23,7 +24,7 @@ export const fetchUnitClassData = createAsyncThunk<UnitClass[]>(
   'unitClass/fetchUnitClassData',
   async (_, { rejectWithValue }) => {
     try {
-      const res = await fetch('http://localhost:3001/class-units');
+      const res = await fetch(`${import.meta.env.VITE_BACKEND}/class-units`);
       const json = await res.json();
 
       if (!json.success) {
