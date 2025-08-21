@@ -1,3 +1,4 @@
+import { useAuth0, type GetTokenSilentlyOptions } from "@auth0/auth0-react";
 import { useState, useEffect } from "react";
 
 type Props = {
@@ -20,8 +21,8 @@ export default function Uploadcsv({ isOpen, onClose, onSubmit, defaultclass }: P
         }
     }, [isOpen, defaultclass]);
 
+    const { getAccessTokenSilently } = useAuth0();
     if (!isOpen) return null;
-
     const handleSubmit = async () => {
         if (!unit || !className || !file) {
             setStatus("Please fill in all fields and select a file.");
@@ -29,16 +30,24 @@ export default function Uploadcsv({ isOpen, onClose, onSubmit, defaultclass }: P
         }
 
         setStatus("Uploading...");
-
         try {
             const formData = new FormData();
             formData.append("unit", unit);
             formData.append("className", className);
             formData.append("csv", file);
+            const newToken = await getAccessTokenSilently({
+                authorizationParams: {
+                    audience: import.meta.env.VITE_AUTH0_AUDIENCE,
+                    scope: "openid profile email"
+                },
+            } as GetTokenSilentlyOptions);
 
             const response = await fetch(`${import.meta.env.VITE_BACKEND}/upload-csv`, {
                 method: "POST",
                 body: formData,
+                headers: {
+                    Authorization: `Bearer ${newToken}`,
+                },
             });
             const uploadJson = await response.json();
             if (!response.ok) {

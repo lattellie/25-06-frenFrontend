@@ -8,10 +8,13 @@ import {
   Volume2,
   ChevronDown,
   ChevronUp,
+  CircleMinus
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useSpeakerAccentContext } from "../contexts/VocabContext";
 import { Accent, type VocabBackend } from "../type/vocabDD";
+import { useAuth0, type GetTokenSilentlyOptions } from "@auth0/auth0-react";
+import toast from "react-hot-toast";
 
 
 export default function RecordPageMongo2() {
@@ -41,7 +44,8 @@ export default function RecordPageMongo2() {
     );
   };
   const { speakerAccent } = useSpeakerAccentContext()
-
+  const [status, setStatus] = useState<string>("");
+  const [authorized, setAuthorized] = useState<boolean>(false);
   const [shouldRecord, setShouldRecord] = useState<boolean>(false);
   const [editVocab, setEditVocab] = useState<VocabBackend>({
     _id: "",
@@ -53,17 +57,72 @@ export default function RecordPageMongo2() {
     qc_url: "",
     tmp_url: ""
   });
+  const [token, setToken] = useState<string | null>(null);
+  const { loginWithRedirect, getAccessTokenSilently, isAuthenticated, logout } = useAuth0();
+  useEffect(() => {
+    if (isAuthenticated) {
+      checkAuth();
+    } else {
+      setStatus("loading...");
+    }
+  }, [isAuthenticated])
 
-  useEffect(()=>{
+  useEffect(() => {
     if (shouldRecord) {
       toggleRecording();
       setShouldRecord(false);
     }
-  },[shouldRecord])
+  }, [shouldRecord])
   const cancelEdit = () => {
     setIsEditing(false);
   };
+  const fetchToken = async () => {
+    const newToken = await getAccessTokenSilently({
+      authorizationParams: {
+        audience: import.meta.env.VITE_AUTH0_AUDIENCE,
+        scope: "openid profile email"
+      },
+    } as GetTokenSilentlyOptions);
+    setToken(newToken);
+    return newToken;
+  };
+  useEffect(() => {
+    async function fetchData() {
+      await fetchToken();
+    }
+    fetchData();
+  }, []);
 
+  const checkAuth = async () => {
+    let tempToken;
+    if (!token) {
+      tempToken = await fetchToken();
+    } else {
+      tempToken = token;
+    }
+    try {
+      const res = await fetch(`${import.meta.env.VITE_BACKEND}/check-auth`, {
+        headers: {
+          Authorization: `Bearer ${tempToken}`,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStatus(`Authorized as ${data.email}`);
+        setAuthorized(true)
+      } else {
+        if (res.status === 403) {
+          setStatus("Forbidden (not whitelisted)");
+        } else if (res.status === 401) {
+          setStatus("Unauthorized (invalid record user)");
+        } else {
+          setStatus("Unknown error");
+        }
+      }
+    } catch (err: any) {
+      setStatus(`Error calling API: ${err}`);
+    };
+  }
   const handleUpdateVocab = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -72,6 +131,7 @@ export default function RecordPageMongo2() {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(editVocab),
       });
@@ -123,10 +183,15 @@ export default function RecordPageMongo2() {
     // }
 
     try {
+
       const res = await fetch(
         `${import.meta.env.VITE_BACKEND}/delete-unit/${selectedUnit}`,
         {
           method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+
         }
       );
       const json = await res.json();
@@ -160,6 +225,9 @@ export default function RecordPageMongo2() {
     try {
       const res = await fetch(`${import.meta.env.VITE_BACKEND}/vocab/${vocabId}`, {
         method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
       const text = await res.text();
       try {
@@ -314,12 +382,20 @@ export default function RecordPageMongo2() {
     setCurrentIndex(0); // reset index when changing unit
   }, [selectedUnit]);
 
+  function sanitizeFileName(input: string): string {
+    return input
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // remove combining marks
+      .replace(/\s+/g, "_")
+      .replace(/[^a-zA-Z0-9._-]/g, "")
+      .toLowerCase();
+  }
   const startRecording = async () => {
     if (!currentVocab || !currentVocab.french) {
       alert("No vocab selected!");
       return;
     }
-    let addOns = "";
+    let addOns = "fr";
     let urlPath = "update-vocab-url";
     if (speakerAccent === Accent.OT) {
       addOns = "ot";
@@ -328,8 +404,9 @@ export default function RecordPageMongo2() {
       addOns = "qc";
       urlPath = "update-vocab-qc";
     }
-    const filename = addOns + currentVocab._id.trim() + ".mp3";
 
+    const fileOriginalName = sanitizeFileName(currentVocab.class.trim()) + "/" + sanitizeFileName(currentVocab.unit.trim()) + "/" + sanitizeFileName(currentVocab.french.trim()) + "__" + addOns + ".mp3";
+    const filename = fileOriginalName;
     setTimeout(async () => {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
@@ -366,6 +443,7 @@ export default function RecordPageMongo2() {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
               },
               body: JSON.stringify({
                 vocabId: currentVocab._id,
@@ -373,9 +451,6 @@ export default function RecordPageMongo2() {
               }),
             });
           }
-
-          console.log(`${urlData.publicUrl}`);
-
           alert("Upload successful!");
           fetchVocab();
         } catch (error: any) {
@@ -412,6 +487,58 @@ export default function RecordPageMongo2() {
     setIsEditing(true); // you can use this to show/hide the form
   };
 
+  async function handleDeleteAudio(word: VocabBackend, accent: Accent) {
+    let addOns = "fr";
+    let remUrl = "mp3_url"
+    if (accent === Accent.OT) {
+      addOns = "ot";
+      remUrl = "tmp_url"
+    } else if (accent === Accent.QC) {
+      addOns = "qc";
+      remUrl = "qc_url"
+    }
+    const filename = sanitizeFileName(word.class.trim()) + "/" + sanitizeFileName(word.unit.trim()) + "/" + sanitizeFileName(word.french.trim()) + "__" + addOns + ".mp3";
+    try {
+      const filePath = `${filename}`
+      const { error } = await supabase.storage
+        .from("vocabmp3files")
+        .remove([filePath]);
+      if (error) throw error;
+      const res = await fetch(`${import.meta.env.VITE_BACKEND}/vocab/${word._id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ [remUrl]: "" }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`Deleted mp3 for ${filename}`, {
+          duration: 3000,
+          style: {
+            background: "#0c4a6e",
+            color: "#fff",
+            fontWeight: "bold",
+          },
+        });
+      } else {
+        throw error;
+      }
+    } catch (err: any) {
+      console.error("Delete error:", err.message);
+      toast.error(`Failed to delete mp3 for ${filename}`, {
+        duration: 3000,
+        style: {
+          background: "#dc2626", // red-600
+          color: "#fff",
+          fontWeight: "bold",
+        },
+      });
+    }
+    fetchVocab();
+  }
   function recordingPanel(word: VocabBackend, index: number) {
     const isCurrent = currentVocab?._id === word._id;
     return (
@@ -442,8 +569,9 @@ export default function RecordPageMongo2() {
                   setCurrentIndex(index);
                   setShouldRecord(true);
                 }}
-                className={`px-4 py-2 ${isRecording && isCurrent ? "bg-amber-800" : "bg-sky-900"
+                className={`px-4 py-2 ${isRecording && isCurrent ? "bg-amber-800" : speakerAccent !== Accent.IA ? "bg-sky-900" : "bg-gray-200 !cursor-default"
                   } text-white rounded text-sm`}
+                disabled={speakerAccent === Accent.IA}
               >
                 {isRecording && isCurrent
                   ? "Stop Recording"
@@ -453,25 +581,51 @@ export default function RecordPageMongo2() {
           </div>
           <div className="flex-2/12 gap-1 flex justify-end">
             {word.mp3_url && speakerAccent === Accent.FR && (
-              <Volume2
-                onClick={() => new Audio(`${word.mp3_url}`).play()}
-                className="w-5 h-5 text-amber-800 hover:text-black cursor-pointer"
-              />
+              <>
+                <Volume2
+                  onClick={() => new Audio(`${word.mp3_url}`).play()}
+                  className="w-5 h-5 text-amber-800 hover:text-black cursor-pointer"
+                />
+                <CircleMinus
+                  onClick={() => {
+                    handleDeleteAudio(word, Accent.FR);
+                  }}
+                  className="w-5 h-5 text-amber-800 hover:text-black cursor-pointer"
+                />
+              </>
             )}
 
             {word.qc_url && speakerAccent === Accent.QC && (
-              <Volume2
-                onClick={() => new Audio(`${word.qc_url}`).play()}
-                className="w-5 h-5 text-amber-800 hover:text-black cursor-pointer"
-              />
+              <>
+                <Volume2
+                  onClick={() => new Audio(`${word.qc_url}`).play()}
+                  className="w-5 h-5 text-amber-800 hover:text-black cursor-pointer"
+                />
+
+                <CircleMinus
+                  onClick={() => {
+                    handleDeleteAudio(word, Accent.QC);
+                  }}
+                  className="w-5 h-5 text-amber-800 hover:text-black cursor-pointer"
+                />
+              </>
             )}
 
             {word.tmp_url && speakerAccent === Accent.OT && (
-              <Volume2
-                onClick={() => new Audio(`${word.tmp_url}`).play()}
-                className="w-5 h-5 text-amber-800 hover:text-black cursor-pointer"
-              />
+              <>
+                <Volume2
+                  onClick={() => new Audio(`${word.tmp_url}`).play()}
+                  className="w-5 h-5 text-amber-800 hover:text-black cursor-pointer"
+                />
+                <CircleMinus
+                  onClick={() => {
+                    handleDeleteAudio(word, Accent.OT);
+                  }}
+                  className="w-5 h-5 text-amber-800 hover:text-black cursor-pointer"
+                />
+              </>
             )}
+
             <Pencil
               onClick={() => {
                 handleEditVocab(word);
@@ -488,6 +642,53 @@ export default function RecordPageMongo2() {
     );
   }
 
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex flex-col justify-center items-center text-center h-full w-full">
+        <h2 className="text-2xl mb-4">Login to access recording page</h2>
+        <button
+          onClick={() => {
+            loginWithRedirect({
+              authorizationParams: {
+                audience: import.meta.env.VITE_AUTH0_AUDIENCE,
+                scope: "openid profile email",
+                redirect_uri: window.location.href,
+              },
+            });
+          }}
+          className="text-3xl px-6 py-3 text-white rounded bg-sky-900 w-auto inline-block"
+          title="log in"
+        >
+          Login
+        </button>
+      </div >
+    )
+  }
+  if (!authorized) {
+    return (
+      <div className="flex flex-col justify-center items-center text-center h-full w-full">
+        <h2 className="text-2xl mb-4">{status}</h2>
+        <button
+          onClick={async () => {
+            await logout();
+            await loginWithRedirect({
+              authorizationParams: {
+                audience: import.meta.env.VITE_AUTH0_AUDIENCE,
+                scope: "openid profile email",
+                redirect_uri: window.location.href,
+              },
+            });
+          }}
+          className="text-3xl px-6 py-3 text-white rounded bg-sky-900 w-auto inline-block"
+          title="log in"
+        >
+          Login
+        </button>
+        {/* <button onClick={checkAuth}>Check</button> */}
+      </div>
+    )
+  }
   return (
     <>
       <div className="flex h-[92vh]">
@@ -518,6 +719,7 @@ export default function RecordPageMongo2() {
               <div className="p-3 pb-1">Select Class/ Unit</div>
               <div className="w-full flex flex-col items-center border-t-2">
                 {classes
+                  .filter((c) => c.toLowerCase() !== "sophie")
                   .sort((a, b) => a.localeCompare(b))
                   .map((cls, index) => {
                     // Compute units for this class
@@ -625,15 +827,15 @@ export default function RecordPageMongo2() {
               </div>
               {/* EDIT EACH VOCAB */}
               {IsEditing && (
-                <div>
-                  <div className="absolute p-4 border rounded bg-white shadow max-w-md w-full">
-                    <h2 className="text-xl font-bold mb-4">Edit Vocabulary</h2>
+                <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
+                  <div className="p-4 border rounded-3xl bg-white shadow-2xl max-w-md w-full">
+                    <h2 className="text-xl font-bold mb-4">Edit Translation</h2>
                     <form onSubmit={handleUpdateVocab}>
                       <div className="mb-3">
                         <label className="block font-semibold mb-1">French</label>
                         <input
                           type="text"
-                          className="w-full border px-2 py-1 rounded"
+                          className="w-full px-2 py-1 rounded bg-gray-200"
                           value={editVocab.french}
                           onChange={(e) =>
                             setEditVocab((prev) => ({
@@ -641,6 +843,7 @@ export default function RecordPageMongo2() {
                               french: e.target.value,
                             }))
                           }
+                          disabled
                         />
                       </div>
 
@@ -665,7 +868,7 @@ export default function RecordPageMongo2() {
                         <label className="block font-semibold mb-1">Unit</label>
                         <input
                           type="text"
-                          className="w-full border px-2 py-1 rounded"
+                          className="w-full border px-2 py-1 rounded bg-gray-200"
                           value={editVocab.unit}
                           onChange={(e) =>
                             setEditVocab((prev) => ({
@@ -673,6 +876,7 @@ export default function RecordPageMongo2() {
                               unit: e.target.value,
                             }))
                           }
+                          disabled
                         />
                       </div>
 
@@ -680,7 +884,7 @@ export default function RecordPageMongo2() {
                         <label className="block font-semibold mb-1">Class</label>
                         <input
                           type="text"
-                          className="w-full border px-2 py-1 rounded"
+                          className="w-full border px-2 py-1 rounded bg-gray-200"
                           value={editVocab.class}
                           onChange={(e) =>
                             setEditVocab((prev) => ({
@@ -688,6 +892,7 @@ export default function RecordPageMongo2() {
                               class: e.target.value,
                             }))
                           }
+                          disabled
                         />
                       </div>
 

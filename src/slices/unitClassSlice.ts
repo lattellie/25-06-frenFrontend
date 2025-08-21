@@ -30,8 +30,9 @@ export const fetchUnitClassData = createAsyncThunk<UnitClass[]>(
       if (!json.success) {
         return rejectWithValue(json.message || 'Failed to fetch class-units');
       }
-
-      return json.data as UnitClass[];
+      const unitclassobj = json.data as UnitClass[]
+      console.log("unitclass obj:", unitclassobj)
+      return unitclassobj.filter((u) => u.class.toLowerCase() !== "sophie");
     } catch (err: any) {
       return rejectWithValue(err.message || 'Network error');
     }
