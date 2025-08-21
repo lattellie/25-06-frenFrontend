@@ -1,9 +1,10 @@
 import { Box, Typography, useTheme } from "@mui/material";
 import {
   useShowEnglishContext,
+  useSpeakerAccentContext,
   useUseAccentContext,
 } from "../contexts/VocabContext";
-import type { VocabBackend } from "../type/vocabDD";
+import { Accent, type VocabBackend } from "../type/vocabDD";
 import { FaCirclePlay } from "react-icons/fa6";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -115,6 +116,7 @@ const stubVocabBackend: VocabBackend = {
 
 export default function DictationPage() {
   const theme = useTheme();
+  const { speakerAccent } = useSpeakerAccentContext();
   const { useAccent, setUseAccent } = useUseAccentContext();
   const { showEnglish, setShowEnglish } = useShowEnglishContext();
   const vocabs: VocabBackend[] = useSelector(
@@ -221,8 +223,11 @@ export default function DictationPage() {
 
   async function playAudio(vocab: VocabBackend) {
     const french: string = vocab.french;
-    if (vocab.mp3_url != "") {
+    if (speakerAccent === Accent.FR && vocab.mp3_url !== "") {
       const audio = new Audio(vocab.mp3_url);
+      await audio.play();
+    } else if (speakerAccent === Accent.QC && vocab.qc_url !== "") {
+      const audio = new Audio(vocab.qc_url);
       await audio.play();
     } else {
       if (!french || voices.length === 0) {

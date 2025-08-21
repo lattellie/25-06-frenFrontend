@@ -392,7 +392,11 @@ export default function HomePage() {
                   <h1 className="text-xl text-left ml-4 mt-4 text-white">{cls.class}</h1>
                   <ul key={cls.class}
                     className=" flex flex-row overflow-scroll">
-                    {cls.units.map((u) => { return getUnitCards(u, cls.class) })}
+                    {[...cls.units]
+                      .sort((a, b) =>
+                        a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
+                      )
+                      .map((u) => getUnitCards(u, cls.class))}
                   </ul>
                 </div>
               )
