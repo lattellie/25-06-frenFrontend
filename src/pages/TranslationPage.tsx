@@ -1,10 +1,11 @@
 import { Box, Typography, useTheme } from "@mui/material";
 import {
+  useSpeakerAccentContext,
   useSpeedContext,
   useUseAccentContext,
   useUseAudioContext,
 } from "../contexts/VocabContext";
-import type { VocabBackend } from "../type/vocabDD";
+import { Accent, type VocabBackend } from "../type/vocabDD";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MdCheckBox, MdCheckBoxOutlineBlank } from "react-icons/md";
@@ -115,6 +116,7 @@ const stubVocabBackend: VocabBackend = {
 
 export default function TranslationPage() {
   const theme = useTheme();
+  const { speakerAccent } = useSpeakerAccentContext();
   const { useAudio, setUseAudio } = useUseAudioContext();
   const { useAccent, setUseAccent } = useUseAccentContext();
   const { speed, setSpeed } = useSpeedContext();
@@ -166,7 +168,7 @@ export default function TranslationPage() {
       handleWordSubmit({ preventDefault: () => { } });
     }, duration);
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [duration, finishPracticing, nowSubmit]);
 
   useEffect(() => {
@@ -257,10 +259,13 @@ export default function TranslationPage() {
       return;
     }
     const french: string = vocab.french;
-    if (vocab.mp3_url != "") {
+    if (speakerAccent === Accent.FR && vocab.mp3_url !== "") {
       const audio = new Audio(vocab.mp3_url);
       await audio.play();
-    } else {
+    } else if (speakerAccent === Accent.OT && vocab.qc_url !== "") {
+      const audio = new Audio(vocab.qc_url);
+      await audio.play();
+    }else {
       if (!french || voices.length === 0) {
         console.warn("Voices not loaded yet");
         return;

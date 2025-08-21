@@ -805,14 +805,40 @@ export default function RecordPageMongo2() {
                   </h2>
                   <p className="text-sm text-gray-700 py-2">
                     Recording progress:{" "}
-                    {filteredVocabs.filter((v) => v.mp3_url).length} /{" "}
-                    {filteredVocabs.length}(
-                    {(
-                      (filteredVocabs.filter((v) => v.mp3_url).length /
-                        filteredVocabs.length) *
-                      100
-                    ).toFixed(0)}
-                    %)
+                    {speakerAccent === Accent.FR && (
+                      <>
+                        {filteredVocabs.filter((v) => v.mp3_url).length} / {filteredVocabs.length} (
+                        {(
+                          (filteredVocabs.filter((v) => v.mp3_url).length /
+                            filteredVocabs.length) *
+                          100
+                        ).toFixed(0)}
+                        %)
+                      </>
+                    )}
+                    {speakerAccent === Accent.QC && (
+                      <>
+                        {filteredVocabs.filter((v) => v.qc_url).length} / {filteredVocabs.length} (
+                        {(
+                          (filteredVocabs.filter((v) => v.qc_url).length /
+                            filteredVocabs.length) *
+                          100
+                        ).toFixed(0)}
+                        %)
+                      </>
+                    )}
+                    {speakerAccent === Accent.OT && (
+                      <>
+                        {filteredVocabs.filter((v) => v.tmp_url).length} / {filteredVocabs.length} (
+                        {(
+                          (filteredVocabs.filter((v) => v.tmp_url).length /
+                            filteredVocabs.length) *
+                          100
+                        ).toFixed(0)}
+                        %)
+                      </>
+                    )}
+
                   </p>
                   <button
                     onClick={handleDeleteUnit}
