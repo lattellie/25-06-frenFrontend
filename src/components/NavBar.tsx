@@ -4,6 +4,7 @@ import { Typography } from '@mui/material';
 import { useSpeakerAccentContext } from '../contexts/VocabContext';
 import React, { useState } from "react";
 import { Accent } from '../type/vocabDD';
+import { PiUserCircle } from 'react-icons/pi';
 
 type DropdownProps = {
   options: string[];
@@ -33,18 +34,18 @@ const Dropdown: React.FC<DropdownProps> = ({ options, onChange, defaultValue }) 
 
 
 export default function NavBar() {
-  const { speakerAccent, setSpeakerAccent } = useSpeakerAccentContext()
-  const options = Object.values(Accent);
+  const { speakerAccent, setSpeakerAccent } = useSpeakerAccentContext();
+  const options = [Accent.IA, Accent.FR, Accent.QC];
   return (
     <div className="h-[8vh] justify-center bg-white text-black border-b-[3px] border-black">
-      <div className='p-4 flex flex-row justify-between'>
+      <div className='flex flex-row justify-between p-2'>
         <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
           <Typography variant="h6" fontFamily="monospace" sx={{ cursor: 'pointer' }}>
             French Vocab
           </Typography>
         </Link>
         <div className='flex flex-row justify-center text-center align-middle'>
-          <h2 className='text-xl p-2'>Current Accent: </h2>
+          <h2 className='text-md p-2'>Current Accent: </h2>
           <Dropdown
             options={options}
             onChange={(val) => {
@@ -55,8 +56,11 @@ export default function NavBar() {
             }}
             defaultValue={speakerAccent}
           />
+          <Link to="/uploaddata" className='text-4xl pl-2 text-sky-900' title='log in'>
+            <PiUserCircle />
+          </Link>
         </div>
       </div>
-    </div>
+    </div >
   );
 }

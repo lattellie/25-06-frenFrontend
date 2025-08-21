@@ -93,7 +93,6 @@ export default function HomePage() {
       const json = await res.json();
       const frenData = json.data as VocabBackend[];
       setFrenVocabs(frenData);
-      console.log(frenData);
     };
 
     if (frenVocab.length === 0) {
@@ -203,12 +202,12 @@ export default function HomePage() {
     } else if (accent === Accent.OT && vocab.tmp_url != "") {
       const audio = new Audio(vocab.tmp_url);
       audio.play();
-    } 
+    }
   }
 
   function getUnitCards(unit: string, cls: string) {
     return (
-      <li key={unit}
+      <li key={`${unit}_${cls}`}
         onClick={() => {
           setSelectedClass(cls);
           setSelectedUnit(unit);
@@ -265,15 +264,6 @@ export default function HomePage() {
         >
           <FaCirclePlay />
         </button>
-        <button
-          onClick={() => playAudio(voc, Accent.OT)}
-          className={`text-xl cursor-pointer mr-4  ${voc.tmp_url === "" ? "text-gray-200 !cursor-default" : "text-cyan-800 cursor-pointer"
-            } p-0 m-0`}
-          disabled={voc.tmp_url === ""}
-        >
-          <FaCirclePlay />
-        </button>
-
 
         {/* French word */}
         <div className="flex items-center w-[40%] min-w-[200px]">
@@ -290,7 +280,12 @@ export default function HomePage() {
     return <div>Error loading data</div>;
   }
   if (unitClassLoading || vocabLoading) {
-    return <div>loading data...</div>;
+    return (
+      <div className="flex justify-center items-center h-full py-4 gap-3">
+        <div className="w-8 h-8 border-4 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
+        <h2>Loading data...</h2>
+      </div>
+    )
   }
   return (
     <div className="flex h-[92vh] max-w-full">
@@ -356,12 +351,6 @@ export default function HomePage() {
                   className="mr-4 text-sky-900 cursor-help text-xl"
                 >
                   QC
-                </div>
-                <div
-                  title="Another Accent"
-                  className="mr-4 text-sky-900 cursor-help text-xl"
-                >
-                  ??
                 </div>
               </div>
 
