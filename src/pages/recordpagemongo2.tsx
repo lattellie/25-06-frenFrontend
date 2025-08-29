@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useSpeakerAccentContext } from "../contexts/VocabContext";
-import { Accent, type VocabBackend } from "../type/vocabDD";
+import { Accent, type InsertVocabBackend, type VocabBackend } from "../type/vocabDD";
 import { useAuth0, type GetTokenSilentlyOptions } from "@auth0/auth0-react";
 import toast from "react-hot-toast";
 
@@ -32,6 +32,7 @@ export default function RecordPageMongo2() {
   // const audioRef = useRef<HTMLAudioElement | null>(null);
   const [IsModalOpen, setIsModalOpen] = useState(false); // for the add csv pop up
   const chunks: Blob[] = [];
+  const [addingWord, setAddingWord] = useState(false);
   const [IsEditing, setIsEditing] = useState(false); // for the add csv pop up
   const selectedRef = useRef<HTMLDivElement>(null);
   const [expandedClasses, setExpandedClasses] = useState<string[]>([]);
@@ -49,6 +50,24 @@ export default function RecordPageMongo2() {
   const [shouldRecord, setShouldRecord] = useState<boolean>(false);
   const [editVocab, setEditVocab] = useState<VocabBackend>({
     _id: "",
+    french: "",
+    english: "",
+    unit: "",
+    class: "",
+    mp3_url: "",
+    qc_url: "",
+    tmp_url: ""
+  });
+  const emptyInsertVocabBackend:InsertVocabBackend = {
+    french: "",
+    english: "",
+    unit: "",
+    class: "",
+    mp3_url: "",
+    qc_url: "",
+    tmp_url: ""
+  }
+  const [addVocab, setAddVocab] = useState<InsertVocabBackend>({
     french: "",
     english: "",
     unit: "",
@@ -125,7 +144,6 @@ export default function RecordPageMongo2() {
   }
   const handleUpdateVocab = async (e: React.FormEvent) => {
     e.preventDefault();
-
     try {
       const res = await fetch(`${import.meta.env.VITE_BACKEND}/vocab/${editVocab._id}`, {
         method: "PUT",
@@ -144,6 +162,36 @@ export default function RecordPageMongo2() {
           prev.map((v) => (v._id === editVocab._id ? editVocab : v))
         );
         setIsEditing(false);
+      } else {
+        alert("Failed to update vocab: " + data.message);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("Error updating vocab: " + err.message);
+    }
+  };
+  const handleAddVocab = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      const vocabToBack = addVocab;
+      vocabToBack.class = selectedClass || "";
+      vocabToBack.unit = selectedUnit || "";
+      const res = await fetch(`${import.meta.env.VITE_BACKEND}/add-vocab`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(vocabToBack),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert("Vocab added!");
+        const newVocab: VocabBackend = { ...vocabToBack, _id: data.insertedId };
+        setVocabData((prev) => [...prev, newVocab]);
+        setAddingWord(false);
       } else {
         alert("Failed to update vocab: " + data.message);
       }
@@ -219,10 +267,21 @@ export default function RecordPageMongo2() {
 
   // for delete one single vocab
 
-  const handleDeleteVocab = async (vocabId: string) => {
-    if (!window.confirm("Are you sure you want to delete this vocab?")) return;
+  const handleDeleteVocab = async (voc: VocabBackend) => {
+    const vocabId = voc._id;
+    const numRecordings = (voc.mp3_url !== "" ? 1 : 0) + (voc.tmp_url !== "" ? 1 : 0) + (voc.qc_url !== "" ? 1 : 0);
+    if (!window.confirm(`Are you sure you want to delete Vocab ${voc.french} and its related ${numRecordings} recordings?`)) return;
 
     try {
+      if (voc.mp3_url !== "") {
+        handleDeleteAudio(voc, Accent.FR);
+      }
+      if (voc.tmp_url !== "") {
+        handleDeleteAudio(voc, Accent.OT);
+      }
+      if (voc.qc_url !== "") {
+        handleDeleteAudio(voc, Accent.QC);
+      }
       const res = await fetch(`${import.meta.env.VITE_BACKEND}/vocab/${vocabId}`, {
         method: "DELETE",
         headers: {
@@ -321,7 +380,7 @@ export default function RecordPageMongo2() {
   // set up all the keyboard shortcut
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "Space" && !IsEditing && !IsModalOpen) {
+      if (e.code === "Space" && !IsEditing && !IsModalOpen && !addingWord) {
         e.preventDefault();
         toggleRecording();
       } else if (
@@ -633,7 +692,7 @@ export default function RecordPageMongo2() {
               className="w-5 h-5 text-amber-800 hover:text-black cursor-pointer"
             />
             <Trash2
-              onClick={() => handleDeleteVocab(word._id)}
+              onClick={() => handleDeleteVocab(word)}
               className="w-5 h-5 text-amber-800 hover:text-black cursor-pointer"
             />
           </div>
@@ -851,7 +910,63 @@ export default function RecordPageMongo2() {
                   </button>
                 </div>
               </div>
-              {/* EDIT EACH VOCAB */}
+              {addingWord && (
+                <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
+                  <div className="p-4 border rounded-3xl bg-white shadow-2xl max-w-md w-full">
+                    <form onSubmit={(e) => {
+                      handleAddVocab(e)
+                    }}>
+                      <div className="mb-3">
+                        <label className="block font-semibold mb-1">
+                          French
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full border px-2 py-1 rounded"
+                          value={addVocab.french}
+                          onChange={(e) =>
+                            setAddVocab((prev) => ({
+                              ...prev,
+                              french: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="mb-3">
+                        <label className="block font-semibold mb-1">
+                          English
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full border px-2 py-1 rounded"
+                          value={addVocab.english}
+                          onChange={(e) =>
+                            setAddVocab((prev) => ({
+                              ...prev,
+                              english: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          type="submit"
+                          className="bg-sky-700 text-white px-4 py-2 rounded hover:bg-sky-800"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          className="bg-gray-300 text-black px-4 py-2 rounded hover:bg-gray-400"
+                          onClick={() => { setAddingWord(false) }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
               {IsEditing && (
                 <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
                   <div className="p-4 border rounded-3xl bg-white shadow-2xl max-w-md w-full">
@@ -942,7 +1057,14 @@ export default function RecordPageMongo2() {
                 </div>
               )}
               <div className="mx-5 my-5 max-w-[1000px] overflow-y-scroll justify-center outline-none">
-                <h2>Press Space to record, left right to switch words</h2>
+                <h2 className="mb-4">Press Space to record, left right to switch words</h2>
+                <button
+                  className="px-4 py-2 mb-4 bg-sky-900 text-white rounded text-sm"
+                  onClick={() => {
+                    setAddVocab(emptyInsertVocabBackend);
+                    setAddingWord(true)
+                  }}
+                >Add a vocab</button>
                 <div className="rounded-2xl border-gray-400 border-2 overflow-y-scroll justify-center outline-none">
                   {filteredVocabs.map((word, index) => {
                     return recordingPanel(word, index);
