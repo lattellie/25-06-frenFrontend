@@ -415,7 +415,7 @@ export default function RecordPageMongo2() {
       ) {
         e.preventDefault();
         goToNext();
-      } else if (e.code === "KeyP" && !IsEditing && !IsModalOpen) {
+      } else if (e.code === "KeyP" && !IsEditing && !IsModalOpen && !addingWord) {
         if (currentVocab?.mp3_url) {
           const audio = new Audio(currentVocab.mp3_url);
           audio.play();

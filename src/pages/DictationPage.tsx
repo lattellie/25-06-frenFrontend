@@ -56,6 +56,8 @@ const frenchCharSet = [
   "ÿ",
   "z",
   "-",
+  "(",
+  ")"
 ];
 
 function useVoices() {
