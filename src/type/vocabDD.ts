@@ -23,7 +23,15 @@ export interface VocabBackend {
   tmp_url:string;
 }
 
-
+export interface InsertVocabBackend {
+  french: string;
+  english: string;
+  unit: string;
+  class: string;
+  mp3_url: string;
+  qc_url:string;
+  tmp_url:string;
+}
 export const Accent = {
   IA: "Intelligence Artificielle (AI)",
   FR: "Français (France)",
